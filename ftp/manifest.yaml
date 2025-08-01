@@ -1,0 +1,14 @@
+name: ftp
+description: ftp backend
+version: 0.1.0
+connectors:
+- type: importer
+  executable: ftpImporter
+  homepage: https://github.com/PlakarKorp/integration-ftp
+  license: ISC
+  protocols: [ftp]
+- type: exporter
+  executable: ftpExporter
+  homepage: https://github.com/PlakarKorp/integration-ftp
+  license: ISC
+  protocols: [ftp]
