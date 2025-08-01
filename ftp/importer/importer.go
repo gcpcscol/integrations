@@ -9,30 +9,19 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/PlakarKorp/integration-ftp/common"
 	"github.com/PlakarKorp/kloset/objects"
 	"github.com/PlakarKorp/kloset/snapshot/importer"
 	"github.com/secsy/goftp"
 )
 
 type FTPImporter struct {
-	host    string
-	rootDir string
-	client  *goftp.Client
-}
-
-func init() {
-	importer.Register("ftp", 0, NewFTPImporter)
-}
-
-func connectToFTP(host, username, password string) (*goftp.Client, error) {
-	config := goftp.Config{
-		User:     username,
-		Password: password,
-		Timeout:  10 * time.Second,
-	}
-	return goftp.DialConfig(config, host)
+	host     string
+	rootDir  string
+	client   *goftp.Client
+	username string
+	password string
 }
 
 func NewFTPImporter(appCtx context.Context, opts *importer.Options, name string, config map[string]string) (importer.Importer, error) {
@@ -43,9 +32,21 @@ func NewFTPImporter(appCtx context.Context, opts *importer.Options, name string,
 		return nil, err
 	}
 
+	var username string
+	if tmp, ok := config["username"]; ok {
+		username = tmp
+	}
+
+	var password string
+	if tmp, ok := config["password"]; ok {
+		password = tmp
+	}
+
 	return &FTPImporter{
-		host:    parsed.Host,
-		rootDir: parsed.Path,
+		host:     parsed.Host,
+		rootDir:  parsed.Path,
+		username: username,
+		password: password,
 	}, nil
 }
 
@@ -120,7 +121,7 @@ func (p *FTPImporter) walkDir(root string, results chan<- string, wg *sync.WaitG
 }
 
 func (p *FTPImporter) Scan(ctx context.Context) (<-chan *importer.ScanResult, error) {
-	client, err := connectToFTP(p.host, "", "")
+	client, err := common.ConnectToFTP(p.host, p.username, p.password)
 	if err != nil {
 		return nil, err
 	}

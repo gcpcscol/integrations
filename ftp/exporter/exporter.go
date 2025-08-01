@@ -22,8 +22,8 @@ import (
 	"io"
 	"net/url"
 	"strings"
-	"time"
 
+	"github.com/PlakarKorp/integration-ftp/common"
 	"github.com/PlakarKorp/kloset/objects"
 	"github.com/PlakarKorp/kloset/snapshot/exporter"
 	"github.com/secsy/goftp"
@@ -33,22 +33,6 @@ type FTPExporter struct {
 	host    string
 	rootDir string
 	client  *goftp.Client
-}
-
-func connectToFTP(host, username, password string) (*goftp.Client, error) {
-	config := goftp.Config{}
-	if username != "" {
-		config.User = username
-	}
-	if password != "" {
-		config.Password = password
-	}
-	config.Timeout = 10 * time.Second
-	return goftp.DialConfig(config, host)
-}
-
-func init() {
-	exporter.Register("ftp", 0, NewFTPExporter)
 }
 
 func NewFTPExporter(ctx context.Context, opts *exporter.Options, name string, config map[string]string) (exporter.Exporter, error) {
@@ -69,7 +53,7 @@ func NewFTPExporter(ctx context.Context, opts *exporter.Options, name string, co
 		password = tmp
 	}
 
-	client, err := connectToFTP(parsed.Host, username, password)
+	client, err := common.ConnectToFTP(parsed.Host, username, password)
 	if err != nil {
 		return nil, err
 	}
