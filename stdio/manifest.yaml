@@ -1,0 +1,14 @@
+name: stdio
+description: stdio backend
+version: 0.1.0-beta.1
+connectors:
+- type: importer
+  executable: stdioImporter
+  homepage: https://github.com/PlakarKorp/integration-stdio
+  license: ISC
+  protocols: [stdin]
+- type: exporter
+  executable: stdioExporter
+  homepage: https://github.com/PlakarKorp/integration-stdio
+  license: ISC
+  protocols: [stdout, stderr]
