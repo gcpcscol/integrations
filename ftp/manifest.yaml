@@ -1,6 +1,6 @@
-name: ftp
-description: ftp backend
-version: 0.1.0
+name: FTP
+description: Integration providing import and export capabilities for FTP servers.
+version: v0.1.0
 connectors:
 - type: importer
   executable: ftpImporter

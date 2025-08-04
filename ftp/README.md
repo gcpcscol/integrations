@@ -1,54 +1,58 @@
-# FTP integration
+# FTP Integration
 
-## Overview
+## What is FTP?
 
-The **Plakar FTP integration** enables seamless backup and restoration of FTP content to and from a [Kloset repository](/posts/2025-04-29/kloset-the-immutable-data-store/).
+**FTP (File Transfer Protocol)** is a standard network protocol used to transfer files between a client and server over a TCP/IP connection. It’s widely used for accessing and managing files on remote servers.
+
+This integrations allows:
+
+- Seamless backup of files hosted on FTP servers into a Kloset repository
+- Direct restoration of snapshots to remote FTP destinations
+- Compatibility with legacy systems and tools that use FTP
+
 
 ## Installation
 
-First, build the binaries:
+If a pre-built package exists for your system and architecture,
+you can simply install it using:
 
-```bash
-$ go build -o ftpImporter ./plugin/importer
-$ go build -o ftpExporter ./plugin/exporter
+```sh
+$ plakar pkg add ftp
 ```
 
-Create the ptar plugin:
+Otherwise,
+you can first build it:
 
-```bash
-$ plakar pkg create manifest.yaml
+```sh
+$ plakar pkg build ftp
 ```
 
 This should produce `ftp-vX.Y.Z.ptar` that can be installed with:
 
 ```bash
-$ plakar pkg add ftp-v0.1.0.ptar
+$ plakar pkg add ./ftp-v0.1.0.ptar
 ```
 
 ## Configuration
 
 The configuration parameters are as follow:
 
-- `location`: The URL of the IMAP server in the form ftp://<host>:<port>.
+- `location` (required): The URL of the FTP server in the form ftp://&lt;host&gt;[:&lt;port&gt;]
+- `username` (optional): The username to authenticate as (defaults to anonymous)
+- `password` (optional): The password to authenticate with (defaults to anonymous)
 
 ## Example Usage
 
 ```bash
-# configure an FTP source connector
-$ plakar source add myFTPsrc ftp://ftp.example.org
+# configure an FTP source
+$ plakar source add myFTPsrc ftp://ftp.example.org/pub/somedirectory
 
-# backup the mailbox
+# backup the source
 $ plakar backup @myFTPsrc
 
-# configure an FTP destination connector
-$ plakar destination add myFTPdst ftp://ftp.example.org
+# configure an FTP destination
+$ plakar destination add myFTPdst ftp://ftp.example.org/upload
 
 # restore the snapshot to the destination
 $ plakar restore -to @myFTPdst <snapid>
 ```
-
-## Questions, Feedback, and Support
-
-Found a bug? [Open an issue on GitHub](https://github.com/PlakarKorp/plakar/issues/new?title=Bug%20report%20on%20Filesystem%20integration&body=Please%20provide%20a%20detailed%20description%20of%20the%20issue.%0A%0A**Plakar%20version**)
-
-Join our [Discord community](https://discord.gg/uuegtnF2Q5) for real-time help and discussions.
