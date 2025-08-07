@@ -26,21 +26,13 @@ type FTPImporter struct {
 
 func NewFTPImporter(appCtx context.Context, opts *importer.Options, name string, config map[string]string) (importer.Importer, error) {
 	target := config["location"]
-
 	parsed, err := url.Parse(target)
 	if err != nil {
 		return nil, err
 	}
 
-	var username string
-	if tmp, ok := config["username"]; ok {
-		username = tmp
-	}
-
-	var password string
-	if tmp, ok := config["password"]; ok {
-		password = tmp
-	}
+	username := config["username"]
+	password := config["password"]
 
 	return &FTPImporter{
 		host:     parsed.Host,
@@ -50,74 +42,125 @@ func NewFTPImporter(appCtx context.Context, opts *importer.Options, name string,
 	}, nil
 }
 
-func (p *FTPImporter) ftpWalker_worker(jobs <-chan string, results chan<- *importer.ScanResult, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (p *FTPImporter) emitParentDirectories(results chan<- *importer.ScanResult) {
+	visited := make(map[string]bool)
 
-	for path := range jobs {
-		info, err := p.client.Stat(path)
-		if err != nil {
-			results <- importer.NewScanError(path, err)
+	// Always emit root "/"
+	if _, seen := visited["/"]; !seen {
+		if info, err := p.client.Stat("/"); err == nil {
+			fileinfo := objects.FileInfoFromStat(info)
+			results <- importer.NewScanRecord("/", "", fileinfo, nil, nil)
+		} else {
+			// fallback to synthetic dir record
+			fileinfo := objects.FileInfo{}
+			fileinfo.Lname = "/"
+			fileinfo.Lmode = os.ModeDir | 0o755
+			fileinfo.Lsize = -1
+			results <- importer.NewScanRecord("/", "", fileinfo, nil, nil)
+		}
+		visited["/"] = true
+	}
+
+	cleaned := path.Clean(p.rootDir)
+	if cleaned == "/" {
+		return
+	}
+
+	// Emit all ancestors of rootDir, top-down
+	parts := strings.Split(cleaned, "/")
+	currPath := "/"
+
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		currPath = path.Join(currPath, part)
+		if visited[currPath] {
 			continue
 		}
 
-		fileinfo := objects.FileInfoFromStat(info)
-
-		results <- importer.NewScanRecord(path, "", fileinfo, nil,
-			func() (io.ReadCloser, error) { return p.NewReader(path) })
-
-		// Handle symlinks separately
-		if fileinfo.Mode()&os.ModeSymlink != 0 {
-			originFile, err := os.Readlink(path)
-			if err != nil {
-				results <- importer.NewScanError(path, err)
-				continue
-			}
-			results <- importer.NewScanRecord(path, originFile, fileinfo, nil, nil)
+		if info, err := p.client.Stat(currPath); err == nil {
+			fileinfo := objects.FileInfoFromStat(info)
+			results <- importer.NewScanRecord(currPath, "", fileinfo, nil, nil)
+		} else {
+			// fallback to synthetic directory record
+			fileinfo := objects.FileInfo{}
+			fileinfo.Lname = path.Base(currPath)
+			fileinfo.Lmode = os.ModeDir | 0o755
+			fileinfo.Lsize = -1
+			results <- importer.NewScanRecord(currPath, "", fileinfo, nil, nil)
 		}
+
+		visited[currPath] = true
 	}
 }
 
-func (p *FTPImporter) ftpWalker_addPrefixDirectories(jobs chan<- string, results chan<- *importer.ScanResult) {
-	directory := path.Clean(p.rootDir)
-	atoms := strings.Split(directory, string(os.PathSeparator))
-
-	for i := 0; i < len(atoms); i++ {
-		path := path.Join(atoms[0 : i+1]...)
-
-		if !strings.HasPrefix(path, "/") {
-			path = "/" + path
-		}
-
-		if _, err := p.client.Stat(path); err != nil {
-			results <- importer.NewScanError(path, err)
-			continue
-		}
-
-		jobs <- path
-	}
-}
-
-func (p *FTPImporter) walkDir(root string, results chan<- string, wg *sync.WaitGroup) {
+func (p *FTPImporter) walkAndCollectFiles(root string, filePaths chan<- string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	entries, err := p.client.ReadDir(root)
 	if err != nil {
-		log.Printf("Error reading directory %s: %v", root, err)
+		log.Printf("[FTPImporter] Error reading directory %s: %v", root, err)
 		return
 	}
 
 	for _, entry := range entries {
 		entryPath := path.Join(root, entry.Name())
 
-		// Send the current entry to the results channel
-		results <- entryPath
-
-		// If the entry is a directory, traverse it recursively
 		if entry.IsDir() {
 			wg.Add(1)
-			go p.walkDir(entryPath, results, wg)
+			go p.walkAndCollectFiles(entryPath, filePaths, wg)
+		} else {
+			filePaths <- entryPath
 		}
 	}
+}
+
+func (p *FTPImporter) processFiles(filePaths <-chan string, results chan<- *importer.ScanResult, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for filePath := range filePaths {
+		info, err := p.client.Stat(filePath)
+		if err != nil {
+			results <- importer.NewScanError(filePath, err)
+			continue
+		}
+
+		fileinfo := objects.FileInfoFromStat(info)
+
+		readerFunc := func() (io.ReadCloser, error) {
+			tmpfile, err := os.CreateTemp("", "plakar-ftp-")
+			if err != nil {
+				return nil, err
+			}
+
+			if err := p.client.Retrieve(filePath, tmpfile); err != nil {
+				tmpfile.Close()
+				os.Remove(tmpfile.Name())
+				return nil, err
+			}
+			tmpfile.Seek(0, 0)
+
+			return readerCloser{File: tmpfile}, nil
+		}
+
+		results <- importer.NewScanRecord(filePath, "", fileinfo, nil, readerFunc)
+	}
+}
+
+type readerCloser struct {
+	File *os.File
+}
+
+func (rc readerCloser) Read(p []byte) (int, error) {
+	return rc.File.Read(p)
+}
+
+func (rc readerCloser) Close() error {
+	name := rc.File.Name()
+	err := rc.File.Close()
+	_ = os.Remove(name)
+	return err
 }
 
 func (p *FTPImporter) Scan(ctx context.Context) (<-chan *importer.ScanResult, error) {
@@ -127,25 +170,37 @@ func (p *FTPImporter) Scan(ctx context.Context) (<-chan *importer.ScanResult, er
 	}
 	p.client = client
 
-	results := make(chan *importer.ScanResult, 1000) // Larger buffer for results
-	jobs := make(chan string, 1000)                  // Buffered channel to feed paths to workers
-	var wg sync.WaitGroup
-	numWorkers := 256
+	results := make(chan *importer.ScanResult, 1000)
+	filePaths := make(chan string, 1000)
 
-	for w := 1; w <= numWorkers; w++ {
-		wg.Add(1)
-		go p.ftpWalker_worker(jobs, results, &wg)
-	}
+	var (
+		workerWG sync.WaitGroup
+		walkerWG sync.WaitGroup
+	)
 
+	// Emit all parent directories before file traversal begins
+	p.emitParentDirectories(results)
+
+	// Walk directory tree
+	walkerWG.Add(1)
+	go p.walkAndCollectFiles(p.rootDir, filePaths, &walkerWG)
+
+	// Close filePaths only after all walk goroutines are done
 	go func() {
-		defer close(jobs)
-		p.ftpWalker_addPrefixDirectories(jobs, results)
-		wg.Add(1)
-		p.walkDir(p.rootDir, jobs, &wg)
+		walkerWG.Wait()
+		close(filePaths)
 	}()
 
+	// Launch worker goroutines to process file paths
+	numWorkers := 64
+	for range numWorkers {
+		workerWG.Add(1)
+		go p.processFiles(filePaths, results, &workerWG)
+	}
+
+	// Close results channel after all workers complete
 	go func() {
-		wg.Wait()
+		workerWG.Wait()
 		close(results)
 	}()
 
@@ -158,13 +213,14 @@ func (p *FTPImporter) NewReader(pathname string) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	err = p.client.Retrieve(pathname, tmpfile)
-	if err != nil {
+	if err := p.client.Retrieve(pathname, tmpfile); err != nil {
+		tmpfile.Close()
+		os.Remove(tmpfile.Name())
 		return nil, err
 	}
-	tmpfile.Seek(0, 0)
 
-	return tmpfile, nil
+	tmpfile.Seek(0, 0)
+	return readerCloser{File: tmpfile}, nil
 }
 
 func (p *FTPImporter) Close(ctx context.Context) error {
