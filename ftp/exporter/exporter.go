@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/PlakarKorp/integration-ftp/common"
@@ -70,16 +71,39 @@ func (p *FTPExporter) Root(ctx context.Context) (string, error) {
 }
 
 func (p *FTPExporter) CreateDirectory(ctx context.Context, pathname string) error {
-	if pathname == "/" {
+	if pathname == "/" || pathname == "." {
 		return nil
 	}
-	_, err := p.client.Mkdir(pathname)
-	if err != nil {
-		if strings.Contains(err.Error(), "exists") {
-			return nil
+
+	pathname = strings.TrimSuffix(path.Clean(pathname), "/")
+	parts := strings.Split(pathname, "/")
+
+	// start from absolute or relative root
+	currPath := ""
+	if strings.HasPrefix(pathname, "/") {
+		currPath = "/"
+	}
+
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		currPath = path.Join(currPath, part)
+
+		_, err := p.client.Mkdir(currPath)
+		if err != nil {
+			// 550 = already exists OR cannot create
+			if strings.Contains(err.Error(), "550") ||
+				strings.Contains(err.Error(), "exists") ||
+				strings.Contains(err.Error(), "File exists") ||
+				strings.Contains(err.Error(), "File exists") {
+				continue
+			}
+			return err
 		}
 	}
-	return err
+
+	return nil
 }
 
 func (p *FTPExporter) StoreFile(ctx context.Context, pathname string, fp io.Reader, size int64) error {
