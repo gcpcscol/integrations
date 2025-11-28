@@ -1,6 +1,6 @@
 name: stdio
 description: stdio backend
-version: v1.0.0
+version: v1.0.4
 connectors:
 - type: importer
   executable: stdioImporter
