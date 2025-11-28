@@ -1,6 +1,6 @@
 name: ptar
 description: ptar backend
-version: v0.1.0-beta.1
+version: v1.0.5
 connectors:
 - type: storage
   executable: ptarStorage
