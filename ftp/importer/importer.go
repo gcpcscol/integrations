@@ -95,8 +95,12 @@ func (p *FTPImporter) emitParentDirectories(results chan<- *importer.ScanResult)
 	}
 }
 
-func (p *FTPImporter) walkAndCollectFiles(root string, filePaths chan<- string, wg *sync.WaitGroup) {
+func (p *FTPImporter) walkAndCollectFiles(ctx context.Context, root string, filePaths chan<- string, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	if err := ctx.Err(); err != nil {
+		return
+	}
 
 	entries, err := p.client.ReadDir(root)
 	if err != nil {
@@ -109,7 +113,7 @@ func (p *FTPImporter) walkAndCollectFiles(root string, filePaths chan<- string, 
 
 		if entry.IsDir() {
 			wg.Add(1)
-			go p.walkAndCollectFiles(entryPath, filePaths, wg)
+			go p.walkAndCollectFiles(ctx, entryPath, filePaths, wg)
 		} else {
 			filePaths <- entryPath
 		}
@@ -183,7 +187,7 @@ func (p *FTPImporter) Scan(ctx context.Context) (<-chan *importer.ScanResult, er
 
 	// Walk directory tree
 	walkerWG.Add(1)
-	go p.walkAndCollectFiles(p.rootDir, filePaths, &walkerWG)
+	go p.walkAndCollectFiles(ctx, p.rootDir, filePaths, &walkerWG)
 
 	// Close filePaths only after all walk goroutines are done
 	go func() {
