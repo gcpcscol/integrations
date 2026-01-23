@@ -188,7 +188,7 @@ func (s *Store) Ping(ctx context.Context) error {
 	switch s.proto {
 	case "ptar":
 		location := strings.TrimPrefix(s.location, "ptar://")
-		if _, err := os.Open(location); err != nil {
+		if _, err := os.Stat(location); err != nil {
 			return err
 		}
 
