@@ -252,7 +252,6 @@ func (s *Store) Size(ctx context.Context) (int64, error) {
 	return fi.Size(), nil
 }
 
-// states
 func (s *Store) List(ctx context.Context, res storage.StorageResource) ([]objects.MAC, error) {
 	switch res {
 	case storage.StorageResourceState:
