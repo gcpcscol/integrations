@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"strings"
 	"sync"
 
 	"github.com/PlakarKorp/integration-ftp/common"
@@ -46,59 +45,6 @@ func NewFTPImporter(appCtx context.Context, opts *connectors.Options, name strin
 		username: username,
 		password: password,
 	}, nil
-}
-
-func (p *FTPImporter) emitParentDirectories(results chan<- *connectors.Record) {
-	visited := make(map[string]bool)
-
-	// Always emit root "/"
-	if _, seen := visited["/"]; !seen {
-		if info, err := p.client.Stat("/"); err == nil {
-			fileinfo := objects.FileInfoFromStat(info)
-			results <- connectors.NewRecord("/", "", fileinfo, nil, nil)
-		} else {
-			// fallback to synthetic dir record
-			fileinfo := objects.FileInfo{}
-			fileinfo.Lname = "/"
-			fileinfo.Lmode = os.ModeDir | 0o755
-			fileinfo.Lsize = -1
-			results <- connectors.NewRecord("/", "", fileinfo, nil, nil)
-		}
-		visited["/"] = true
-	}
-
-	cleaned := path.Clean(p.rootDir)
-	if cleaned == "/" {
-		return
-	}
-
-	// Emit all ancestors of rootDir, top-down
-	parts := strings.Split(cleaned, "/")
-	currPath := "/"
-
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		currPath = path.Join(currPath, part)
-		if visited[currPath] {
-			continue
-		}
-
-		if info, err := p.client.Stat(currPath); err == nil {
-			fileinfo := objects.FileInfoFromStat(info)
-			results <- connectors.NewRecord(currPath, "", fileinfo, nil, nil)
-		} else {
-			// fallback to synthetic directory record
-			fileinfo := objects.FileInfo{}
-			fileinfo.Lname = path.Base(currPath)
-			fileinfo.Lmode = os.ModeDir | 0o755
-			fileinfo.Lsize = -1
-			results <- connectors.NewRecord(currPath, "", fileinfo, nil, nil)
-		}
-
-		visited[currPath] = true
-	}
 }
 
 func (p *FTPImporter) walkAndCollectFiles(ctx context.Context, root string, filePaths chan<- string, wg *sync.WaitGroup) {
