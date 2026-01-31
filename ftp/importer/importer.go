@@ -37,8 +37,23 @@ func NewImporter(appCtx context.Context, opts *connectors.Options, name string, 
 		return nil, err
 	}
 
-	username := config["username"]
-	password := config["password"]
+	var username string
+	if tmp, ok := config["username"]; ok {
+		username = tmp
+	}
+	var password string
+	if tmp, ok := config["password"]; ok {
+		password = tmp
+	}
+
+	if parsed.User != nil {
+		if parsed.User.Username() != "" {
+			username = parsed.User.Username()
+		}
+		if p, ok := parsed.User.Password(); ok {
+			password = p
+		}
+	}
 
 	return &Importer{
 		host:     parsed.Host,
