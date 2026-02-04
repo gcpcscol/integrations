@@ -1,7 +1,7 @@
 name: oci
 display_name: OCI
 description: Integration providing import capabilities from Docker images.
-version: v.1.0.0-beta
+version: v1.1.0-beta.1
 connectors:
 - type: importer
   executable: ociImporter
