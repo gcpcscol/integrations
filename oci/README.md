@@ -40,56 +40,36 @@ The exact layout is an internal detail and may evolve, but the registry always c
 The configuration parameters are as follows:
 
 * `location` (required): OCI registry reference where the store lives
-  (e.g. `oci://ghcr.io/my-org/plakar-store`)
+  (e.g. `oci://localhost:5000/my-org/plakar-store`)
 
-* `username` (optional): Registry username (if required)
-
-* `password` (optional): Registry password or token
-
-* `use_tls` (optional): Whether to use TLS (defaults to `true`)
-
-* `tls_insecure_no_verify` (optional): Disable TLS certificate verification (defaults to `false`)
-
-Optional, registry-specific parameters:
-
-* `repository_prefix`: Prefix used inside the registry repository
-* `media_type`: Custom OCI media type for stored artifacts (advanced)
-
-Authentication may also be provided via:
-
-* Docker credential helpers
-* Environment variables
-* Cloud provider IAM (ECR, GCR, ACR), when supported
+Authentication is not yet supported, will be added in upcoming beta.
 
 ## Examples
 
+Start a test registry container:
+
 ```bash
-# Configure an OCI registry store (GitHub Container Registry)
-$ plakar store add myOCIstore \
-  oci://ghcr.io/my-org/plakar \
-  username=YOUR_USERNAME \
-  password=YOUR_TOKEN
-
-# Create the store
-$ plakar at @myOCIstore create
-
-# Use the store for backups
-$ plakar at @myOCIstore backup /data
-
-# List snapshots
-$ plakar at @myOCIstore snapshots
-
-# Restore a snapshot
-$ plakar at @myOCIstore restore <snapid> /restore/path
+$ docker run -d --name oci-registry \             
+  -p 5000:5000 \
+  -v $(pwd)/registry-data:/var/lib/registry \
+  registry:2
+b61a4bc5df40307b6301d30f692cd276db64acd8448258ba49f2a4c6c760cb8c
+$
 ```
 
-Example using a cloud-managed registry (AWS ECR):
-
+Setup a store:
 ```bash
-# Authentication handled via AWS IAM
-$ plakar store add myOCIstore oci://123456789012.dkr.ecr.us-east-1.amazonaws.com/plakar
+# Configure an OCI registry store
+$ plakar at oci://localhost:5000/helloworld create
 
-$ plakar at @myOCIstore create
+# Use the store for backups
+$ plakar -silent at oci://localhost:5000/helloworld backup
+
+# List snapshots
+$ plakar at oci://localhost:5000/helloworld ls
+
+# Restore a snapshot
+$ plakar at oci://localhost:5000/helloworld restore <snapid>
 ```
 
 ## Use Cases
@@ -116,7 +96,3 @@ $ plakar at @myOCIstore create
 ## Compatibility
 
 This store targets the OCI Distribution Specification and should work with any compliant registry implementation.
-
----
-
-This integration turns OCI registries into first-class, cloud-native storage backends for Kloset repositories.
