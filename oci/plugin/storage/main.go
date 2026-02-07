@@ -3,10 +3,10 @@ package main
 import (
 	"os"
 
-	sdk "github.com/PlakarKorp/go-kloset-sdk/v2"
+	sdk "github.com/PlakarKorp/go-kloset-sdk"
 	"github.com/PlakarKorp/integration-oci/storage"
 )
 
 func main() {
-	sdk.EntrypointImporter(os.Args, storage.New)
+	sdk.EntrypointStorage(os.Args, storage.New)
 }

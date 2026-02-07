@@ -1,10 +1,10 @@
 name: oci
 display_name: OCI
-description: Integration providing import capabilities from Docker images.
+description: Integration providing storage capabilities on OCI registries
 version: v1.1.0-beta.1
 connectors:
-- type: importer
-  executable: ociImporter
+- type: storage
+  executable: ociStorage
   homepage: https://github.com/PlakarKorp/integration-oci
   license: ISC
   protocols: [oci]

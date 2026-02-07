@@ -3,7 +3,7 @@ GO=go
 all: build
 
 build:
-	${GO} build -v -o ociImporter ./plugin/importer
+	${GO} build -v -o ociStorage ./plugin/storage
 
 clean:
-	rm -f ociImporter oci-*.ptar
+	rm -f ociStorage oci-*.ptar
