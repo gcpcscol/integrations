@@ -215,6 +215,7 @@ func (k *k8s) Export(ctx context.Context, records <-chan *connectors.Record, res
 			err = dec.Decode(&obj.Object)
 		)
 		if err != nil {
+			results <- record.Error(err)
 			return err
 		}
 
@@ -226,6 +227,7 @@ func (k *k8s) Export(ctx context.Context, records <-chan *connectors.Record, res
 		gvk := obj.GroupVersionKind()
 		rest, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
+			results <- record.Error(err)
 			return err
 		}
 
@@ -242,8 +244,11 @@ func (k *k8s) Export(ctx context.Context, records <-chan *connectors.Record, res
 			FieldManager: "plakar-k8s-exporter",
 		})
 		if err != nil {
+			results <- record.Error(err)
 			return err
 		}
+
+		results <- record.Ok()
 	}
 
 	return nil
