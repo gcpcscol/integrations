@@ -19,7 +19,7 @@ The configuration parameters are as follows:
 - username and password (optional)
 
 
-## Example
+## Examples
 
 Backup etcd by connecting to a node over http without authentication:
 
