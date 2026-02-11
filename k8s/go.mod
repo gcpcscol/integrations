@@ -3,6 +3,7 @@ module github.com/PlakarKorp/integration-k8s
 go 1.25.5
 
 require (
+	github.com/PlakarKorp/go-kloset-sdk v1.1.0-beta.1
 	github.com/PlakarKorp/kloset v1.1.0-beta.1
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sync v0.19.0
@@ -12,7 +13,6 @@ require (
 )
 
 require (
-	github.com/PlakarKorp/go-kloset-sdk v1.1.0-beta.1 // indirect
 	github.com/PlakarKorp/integration-grpc v1.1.0-beta.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
