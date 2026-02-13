@@ -26,3 +26,7 @@ Backup all the resources applied to a kubernetes cluster:
 Restore all the `StatefulSet`s in the `foo` namespace:
 
 	$ plakar restore -to k8s://localhost:8001 abcd:/foo/apps/StatefulSet
+
+Backup the PVC `my-pvc` in the `storage` namespace:
+
+	$ plakar backup -o volume_snapshot_class_name=my-snapclass k8s+pvc://localhost:8001/storage/my-pvc
