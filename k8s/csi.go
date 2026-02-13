@@ -6,17 +6,23 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
+	"path"
+	"sync/atomic"
+	"time"
 
+	gimporter "github.com/PlakarKorp/integration-grpc/importer"
+	"github.com/PlakarKorp/kloset/connectors"
+	"github.com/PlakarKorp/kloset/connectors/importer"
+	"github.com/PlakarKorp/kloset/location"
 	vs "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
-	// sftpImporter "github.com/PlakarKorp/integration-sftp/importer"
-	// "github.com/PlakarKorp/kloset/connectors"
 )
 
 func isready(snap *vs.VolumeSnapshot) bool {
@@ -123,7 +129,7 @@ func (k *k8s) pvcFromSnap(ctx context.Context, ns string, snap *vs.VolumeSnapsho
 		Spec: corev1.PersistentVolumeClaimSpec{
 			DataSource: &corev1.TypedLocalObjectReference{
 				APIGroup: &apiGroup,
-				Kind:     snap.Kind,
+				Kind:     "VolumeSnapshot",
 				Name:     snap.Name,
 			},
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -147,7 +153,7 @@ func (k *k8s) delpvc(ctx context.Context, pvc *corev1.PersistentVolumeClaim) err
 		Delete(ctx, pvc.Name, metav1.DeleteOptions{})
 }
 
-func (k *k8s) sftpServer(ctx context.Context, ns string, pvc *corev1.PersistentVolumeClaim) (*corev1.Pod, error) {
+func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVolumeClaim) (*corev1.Pod, error) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "plakar-backup-",
@@ -167,12 +173,12 @@ func (k *k8s) sftpServer(ctx context.Context, ns string, pvc *corev1.PersistentV
 				},
 			}},
 			Containers: []corev1.Container{{
-				Name:  "sftp",
-				Image: "atmoz/sftp",
-				Args:  []string{"chunky:ptarson:::/data"},
+				Name:  "kubelet",
+				Image: "ghcr.io/plakarkorp/kubelet:f28d4e11-202602131255",
+				Args:  []string{"-p", "8080"},
 				Ports: []corev1.ContainerPort{{
-					Name:          "ssh",
-					ContainerPort: 22,
+					Name:          "grpc",
+					ContainerPort: 8080,
 				}},
 				VolumeMounts: []corev1.VolumeMount{{
 					Name:      "snap",
@@ -239,7 +245,80 @@ func (k *k8s) delpod(ctx context.Context, pod *corev1.Pod) error {
 	return k.clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
 }
 
-func (k *k8s) sftpBackup(ctx context.Context, pod *corev1.Pod) error {
+func progress(ctx context.Context, imp importer.Importer, fn func(<-chan *connectors.Record, chan<- *connectors.Result)) error {
+	var (
+		size    = 2
+		records = make(chan *connectors.Record, size)
+		retch   = make(chan struct{}, 1)
+	)
+
+	var results chan *connectors.Result
+	if (imp.Flags() & location.FLAG_NEEDACK) != 0 {
+		results = make(chan *connectors.Result, size)
+	}
+
+	go func() {
+		fn(records, results)
+		if results != nil {
+			close(results)
+		}
+		close(retch)
+	}()
+
+	err := imp.Import(ctx, records, results)
+	<-retch
+	return err
+}
+
+func (k *k8s) consume(ctx context.Context, dest, podpath string, pvc *corev1.PersistentVolumeClaim, inflight *inflight, Records chan<- *connectors.Record) (int64, error) {
+	client, err := grpc.NewClient(dest, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return 0, fmt.Errorf("failed to create a grpc client for %s: %w", dest, err)
+	}
+
+	opts := &connectors.Options{
+		Hostname:        "foobar",
+		OperatingSystem: "linux",
+		Architecture:    "amd64",
+		CWD:             podpath,
+		MaxConcurrency:  2,
+	}
+
+	importer, err := gimporter.NewImporter(ctx, client, opts, "fs", map[string]string{
+		"location":         "fs://" + podpath,
+		"dont_traverse_fs": "true",
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to instantiate the importer: %w", err)
+	}
+
+	inflight.mtx.Lock()
+	inflight.inflight[pvc.Namespace+"/"+pvc.Name] = new(atomic.Int64)
+	inflight.mtx.Unlock()
+
+	var n int64
+	err = progress(ctx, importer, func(records <-chan *connectors.Record, results chan<- *connectors.Result) {
+		for record := range records {
+			if record.Pathname == "/" {
+				if results != nil {
+					results <- record.Ok()
+				} else {
+					record.Close()
+				}
+				continue
+			}
+
+			n++
+
+			newrecord := *record
+			newrecord.Pathname = path.Join("/data/pvc/", pvc.Namespace, pvc.Name, record.Pathname)
+			Records <- &newrecord
+		}
+	})
+	return n, err
+}
+
+func (k *k8s) fsBackup(ctx context.Context, pod *corev1.Pod, pvc *corev1.PersistentVolumeClaim, inflight *inflight, records chan<- *connectors.Record) error {
 	var url string
 	if k.portForward {
 		u := k.clientset.CoreV1().RESTClient().Post().
@@ -262,7 +341,7 @@ func (k *k8s) sftpBackup(ctx context.Context, pod *corev1.Pod) error {
 
 		defer close(stopChan)
 
-		pf, err := portforward.New(dialer, []string{":22"}, stopChan, readyChan, io.Discard, io.Discard)
+		pf, err := portforward.New(dialer, []string{":8080"}, stopChan, readyChan, io.Discard, io.Discard)
 		if err != nil {
 			return err
 		}
@@ -275,41 +354,35 @@ func (k *k8s) sftpBackup(ctx context.Context, pod *corev1.Pod) error {
 			return err
 		}
 
-		log.Printf("ports is %+v", ports)
-
-		url = fmt.Sprintf("sftp://chunky@localhost:%d/", ports[0].Local)
+		url = fmt.Sprintf("localhost:%d", ports[0].Local)
 	} else {
-		url = fmt.Sprintf("sftp://%s.%s.svc.cluster.local:22", pod.Name, pod.Namespace)
+		url = fmt.Sprintf("%s.%s.svc.cluster.local:8080", pod.Name, pod.Namespace)
 	}
 
 	log.Println("url is", url)
 
-	// sftpImporter.NewImporter(ctx, &connectors.Options{
-	// 	Hostname:        "",
-	// 	OperatingSystem: "",
-	// 	Architecture:    "",
-	// 	CWD:             "",
-	// 	MaxConcurrency:  0,
-	// 	Excludes:        []string{},
-	// 	Stdin:           nil,
-	// 	Stdout:          nil,
-	// 	Stderr:          nil,
-	// }, "sftp", )
-
-	log.Println("created everything, now waiting")
-	fp, err := os.Open("/dev/tty")
+	expected, err := k.consume(ctx, url, "/data", pvc, inflight, records)
 	if err != nil {
-		log.Println("failed to open /dev/tty:", err)
-	} else {
-		var buf [1]byte
-		fp.Read(buf[:])
-		fp.Close()
+		log.Println("failed to run the grpc importer:", err)
+		return err
+	}
+
+	inflight.mtx.RLock()
+	done := inflight.inflight[pvc.Namespace+"/"+pvc.Name]
+	inflight.mtx.RUnlock()
+
+	for {
+		if expected == done.Load() {
+			break
+		}
+
+		time.Sleep(time.Second)
 	}
 
 	return nil
 }
 
-func (k *k8s) backupPvc(ctx context.Context, ns, name string) error {
+func (k *k8s) backupPvc(ctx context.Context, ns, name string, inflight *inflight, records chan<- *connectors.Record) error {
 	snap, err := k.gensnap(ctx, ns, name)
 	if err != nil {
 		log.Println("failed to generate the snapshot:", err)
@@ -323,7 +396,7 @@ func (k *k8s) backupPvc(ctx context.Context, ns, name string) error {
 		return err
 	}
 
-	pod, err := k.sftpServer(ctx, ns, pvc)
+	pod, err := k.fsServer(ctx, ns, pvc)
 	if err != nil {
 		k.delpvc(ctx, pvc)
 		k.delsnap(ctx, snap)
@@ -331,7 +404,7 @@ func (k *k8s) backupPvc(ctx context.Context, ns, name string) error {
 		return err
 	}
 
-	err = k.sftpBackup(ctx, pod)
+	err = k.fsBackup(ctx, pod, pvc, inflight, records)
 	if err != nil {
 		log.Println("failed to backup the pod:", err)
 	}

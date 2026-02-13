@@ -10,6 +10,8 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/PlakarKorp/kloset/connectors"
 	"github.com/PlakarKorp/kloset/connectors/exporter"
@@ -128,12 +130,17 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 func (k *k8s) Type() string          { return "k8s" }
 func (k *k8s) Origin() string        { return k.host }
 func (k *k8s) Root() string          { return "/" + k.root }
-func (k *k8s) Flags() location.Flags { return location.FLAG_STREAM }
+func (k *k8s) Flags() location.Flags { return location.FLAG_STREAM | location.FLAG_NEEDACK }
 
 func (k *k8s) Ping(ctx context.Context) error {
 	ns := k.clientset.CoreV1().Namespaces()
 	_, err := ns.Get(ctx, "default", metav1.GetOptions{})
 	return err
+}
+
+type inflight struct {
+	mtx      sync.RWMutex
+	inflight map[string]*atomic.Int64
 }
 
 func (k *k8s) Import(ctx context.Context, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
@@ -143,6 +150,26 @@ func (k *k8s) Import(ctx context.Context, records chan<- *connectors.Record, res
 	if err != nil {
 		return err
 	}
+
+	inflight := inflight{
+		inflight: make(map[string]*atomic.Int64),
+	}
+
+	go func() {
+		for result := range results {
+			rest, found := strings.CutPrefix(result.Record.Pathname, "/data/pvc/")
+			if !found {
+				continue
+			}
+
+			namespace, rest, _ := strings.Cut(rest, "/")
+			name, _, _ := strings.Cut(rest, "/")
+
+			inflight.mtx.RLock()
+			inflight.inflight[namespace+"/"+name].Add(1)
+			inflight.mtx.RUnlock()
+		}
+	}()
 
 	var wg errgroup.Group
 	wg.SetLimit(k.opts.MaxConcurrency)
@@ -224,7 +251,7 @@ func (k *k8s) Import(ctx context.Context, records chan<- *connectors.Record, res
 
 					if gvk.Kind == "PersistentVolumeClaim" {
 						wg.Go(func() error {
-							err := k.backupPvc(ctx, ns, item.GetName())
+							err := k.backupPvc(ctx, ns, item.GetName(), &inflight, records)
 							log.Println("backupPvc failed with", err)
 							return nil
 						})
