@@ -47,6 +47,7 @@ type k8s struct {
 	portForward bool
 
 	volumeSnapshotClassName string
+	kubeletImage            string
 }
 
 func init() {
@@ -95,6 +96,11 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 		return nil, fmt.Errorf("missing volume_snapshot_class_name option")
 	}
 
+	kubeletImage := params["kubelet_image"]
+	if kubeletImage == "" {
+		kubeletImage = "ghcr.io/plakarkorp/kubelet:f28d4e11-202602131255"
+	}
+
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err
@@ -128,6 +134,7 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 		portForward: true,
 
 		volumeSnapshotClassName: snapClass,
+		kubeletImage:            kubeletImage,
 	}, nil
 }
 

@@ -174,7 +174,7 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 			}},
 			Containers: []corev1.Container{{
 				Name:  "kubelet",
-				Image: "ghcr.io/plakarkorp/kubelet:f28d4e11-202602131255",
+				Image: k.kubeletImage,
 				Args:  []string{"-p", "8080"},
 				Ports: []corev1.ContainerPort{{
 					Name:          "grpc",
