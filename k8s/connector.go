@@ -53,16 +53,11 @@ func NewExporter(ctx context.Context, opts *connectors.Options, name string, par
 }
 
 func New(ctx context.Context, opts *connectors.Options, name string, params map[string]string) (*k8s, error) {
-	var host, root string
+	var host string
 
 	u, err := url.Parse(params["location"])
 	if err != nil {
 		return nil, fmt.Errorf("bad location: %w", err)
-	}
-
-	root = u.Path
-	if !strings.HasPrefix(root, "/") {
-		root = "/" + root
 	}
 
 	var config *rest.Config
@@ -78,6 +73,11 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 			return nil, fmt.Errorf("%w (not running in a kubernetes cluster?)", err)
 		}
 		host = "in-cluster"
+	}
+
+	root := strings.Trim(u.Path, "/")
+	if strings.Contains(root, "/") {
+		return nil, fmt.Errorf("bad location: slashes in namespace: %s", params["location"])
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -107,7 +107,7 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 
 func (k *k8s) Type() string          { return "k8s" }
 func (k *k8s) Origin() string        { return k.host }
-func (k *k8s) Root() string          { return k.root }
+func (k *k8s) Root() string          { return "/" + k.root }
 func (k *k8s) Flags() location.Flags { return 0 }
 
 func (k *k8s) Ping(ctx context.Context) error {
@@ -143,6 +143,10 @@ func (k *k8s) Import(ctx context.Context, records chan<- *connectors.Record, res
 				continue
 			}
 
+			if k.root != "" && !res.Namespaced {
+				continue
+			}
+
 			gvr := groupVersion.WithResource(res.Name)
 
 			wg.Go(func() error {
@@ -166,6 +170,10 @@ func (k *k8s) Import(ctx context.Context, records chan<- *connectors.Record, res
 
 					if res.Namespaced {
 						ns = item.GetNamespace()
+					}
+
+					if k.root != "" && k.root != ns {
+						continue
 					}
 
 					if gvk.Group != "" {
