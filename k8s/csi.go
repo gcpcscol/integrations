@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"path"
+	"runtime"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -30,7 +30,6 @@ func isready(snap *vs.VolumeSnapshot) bool {
 }
 
 func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot, error) {
-	log.Println(">>>> in gensnap for", ns, name)
 	snap := &vs.VolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "snap-" + name + "-",
@@ -52,8 +51,6 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 	if err != nil {
 		return nil, err
 	}
-
-	log.Println("created", snap.Name)
 
 	w, err := k.snapClient.SnapshotV1().VolumeSnapshots(ns).Watch(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -86,8 +83,6 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 
 		s, ok := evt.Object.(*vs.VolumeSnapshot)
 		if !ok {
-			log.Printf("the watcher returned an object of an unknown type %t",
-				evt.Object)
 			continue
 		}
 
@@ -102,7 +97,6 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 
 		if isready(s) {
 			snap = s
-			log.Printf("the snapshot %s is ready!", snap.Name)
 			break
 		}
 	}
@@ -111,7 +105,6 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 }
 
 func (k *k8s) delsnap(ctx context.Context, snap *vs.VolumeSnapshot) error {
-	log.Println("deleting snap", snap.Name)
 	return k.snapClient.SnapshotV1().VolumeSnapshots(snap.ObjectMeta.Namespace).
 		Delete(ctx, snap.ObjectMeta.Name, metav1.DeleteOptions{})
 }
@@ -148,7 +141,6 @@ func (k *k8s) pvcFromSnap(ctx context.Context, ns string, snap *vs.VolumeSnapsho
 }
 
 func (k *k8s) delpvc(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
-	log.Println("deleting pvc", pvc.Name)
 	return k.clientset.CoreV1().PersistentVolumeClaims(pvc.ObjectMeta.Namespace).
 		Delete(ctx, pvc.Name, metav1.DeleteOptions{})
 }
@@ -193,8 +185,6 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 		return nil, err
 	}
 
-	log.Println("pod created", pod.Name)
-
 	w, err := k.clientset.CoreV1().Pods(pod.Namespace).Watch(ctx, metav1.ListOptions{})
 	if err != nil {
 		k.delpod(ctx, pod)
@@ -224,8 +214,6 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 
 			p, ok := evt.Object.(*corev1.Pod)
 			if !ok {
-				log.Printf("pods: the watcher returned an object of type %t",
-					evt.Object)
 				continue
 			}
 
@@ -241,7 +229,6 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 }
 
 func (k *k8s) delpod(ctx context.Context, pod *corev1.Pod) error {
-	log.Println("deleting pod", pod.Name)
 	return k.clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
 }
 
@@ -270,18 +257,19 @@ func progress(ctx context.Context, imp importer.Importer, fn func(<-chan *connec
 	return err
 }
 
-func (k *k8s) consume(ctx context.Context, dest, podpath string, pvc *corev1.PersistentVolumeClaim, inflight *inflight, Records chan<- *connectors.Record) (int64, error) {
+func (k *k8s) consume(ctx context.Context, dest, podpath string, Records chan<- *connectors.Record, results <-chan *connectors.Result) error {
 	client, err := grpc.NewClient(dest, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return 0, fmt.Errorf("failed to create a grpc client for %s: %w", dest, err)
+		return fmt.Errorf("failed to create a grpc client for %s: %w", dest, err)
 	}
+	defer client.Close()
 
 	opts := &connectors.Options{
-		Hostname:        "foobar",
+		Hostname:        "plakar-pod",
 		OperatingSystem: "linux",
-		Architecture:    "amd64",
+		Architecture:    runtime.GOOS,
 		CWD:             podpath,
-		MaxConcurrency:  2,
+		MaxConcurrency:  k.opts.MaxConcurrency,
 	}
 
 	importer, err := gimporter.NewImporter(ctx, client, opts, "fs", map[string]string{
@@ -289,14 +277,19 @@ func (k *k8s) consume(ctx context.Context, dest, podpath string, pvc *corev1.Per
 		"dont_traverse_fs": "true",
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to instantiate the importer: %w", err)
+		return fmt.Errorf("failed to instantiate the importer: %w", err)
 	}
+	defer importer.Close(ctx)
 
-	inflight.mtx.Lock()
-	inflight.inflight[pvc.Namespace+"/"+pvc.Name] = new(atomic.Int64)
-	inflight.mtx.Unlock()
+	var done atomic.Uint64
 
-	var n int64
+	go func() {
+		for range results {
+			done.Add(1)
+		}
+	}()
+
+	var total uint64
 	err = progress(ctx, importer, func(records <-chan *connectors.Record, results chan<- *connectors.Result) {
 		for record := range records {
 			if record.Pathname == "/" {
@@ -308,17 +301,30 @@ func (k *k8s) consume(ctx context.Context, dest, podpath string, pvc *corev1.Per
 				continue
 			}
 
-			n++
-
 			newrecord := *record
-			newrecord.Pathname = path.Join("/data/pvc/", pvc.Namespace, pvc.Name, record.Pathname)
+			newrecord.Pathname = strings.TrimPrefix(record.Pathname, "/data")
+			if newrecord.Pathname == "" {
+				newrecord.Pathname = "/"
+				newrecord.FileInfo.Lname = "/"
+			}
+
 			Records <- &newrecord
+			total++
 		}
 	})
-	return n, err
+	if err != nil {
+		return fmt.Errorf("failed to run the grpc importer: %w", err)
+	}
+
+	for {
+		if total == done.Load() {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
 }
 
-func (k *k8s) fsBackup(ctx context.Context, pod *corev1.Pod, pvc *corev1.PersistentVolumeClaim, inflight *inflight, records chan<- *connectors.Record) error {
+func (k *k8s) podBackup(ctx context.Context, pod *corev1.Pod, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
 	var url string
 	if k.portForward {
 		u := k.clientset.CoreV1().RESTClient().Post().
@@ -359,70 +365,27 @@ func (k *k8s) fsBackup(ctx context.Context, pod *corev1.Pod, pvc *corev1.Persist
 		url = fmt.Sprintf("%s.%s.svc.cluster.local:8080", pod.Name, pod.Namespace)
 	}
 
-	log.Println("url is", url)
-
-	expected, err := k.consume(ctx, url, "/data", pvc, inflight, records)
-	if err != nil {
-		log.Println("failed to run the grpc importer:", err)
-		return err
-	}
-
-	inflight.mtx.RLock()
-	done := inflight.inflight[pvc.Namespace+"/"+pvc.Name]
-	inflight.mtx.RUnlock()
-
-	for {
-		if expected == done.Load() {
-			break
-		}
-
-		time.Sleep(time.Second)
-	}
-
-	return nil
+	return k.consume(ctx, url, "/data", records, results)
 }
 
-func (k *k8s) backupPvc(ctx context.Context, ns, name string, inflight *inflight, records chan<- *connectors.Record) error {
+func (k *k8s) backupPvc(ctx context.Context, ns, name string, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
 	snap, err := k.gensnap(ctx, ns, name)
 	if err != nil {
-		log.Println("failed to generate the snapshot:", err)
-		return err
+		return fmt.Errorf("failed to generate the snapshot: %w", err)
 	}
+	defer k.delsnap(ctx, snap)
 
 	pvc, err := k.pvcFromSnap(ctx, ns, snap)
 	if err != nil {
-		k.delsnap(ctx, snap)
-		log.Println("failed to generate the pvc from the snap:", err)
-		return err
+		return fmt.Errorf("failed to generate the pvc from the snap: %w", err)
 	}
+	defer k.delpvc(ctx, pvc)
 
 	pod, err := k.fsServer(ctx, ns, pvc)
 	if err != nil {
-		k.delpvc(ctx, pvc)
-		k.delsnap(ctx, snap)
-		log.Println("failed to generate pod from the pvc:", err)
-		return err
+		return fmt.Errorf("failed to create the pod: %w", err)
 	}
+	defer k.delpod(ctx, pod)
 
-	err = k.fsBackup(ctx, pod, pvc, inflight, records)
-	if err != nil {
-		log.Println("failed to backup the pod:", err)
-	}
-
-	if err := k.delpod(ctx, pod); err != nil {
-		log.Printf("failed to delete pod %s/%s: %s", pod.ObjectMeta.Namespace,
-			pvc.ObjectMeta.Name, err)
-	}
-
-	if err := k.delpvc(ctx, pvc); err != nil {
-		log.Printf("failed to delete PVC %s/%s: %s", pvc.ObjectMeta.Namespace,
-			pvc.ObjectMeta.Name, err)
-	}
-
-	if err := k.delsnap(ctx, snap); err != nil {
-		log.Printf("failed to delete VolumeSnapshot %s/%s: %s", snap.ObjectMeta.Namespace,
-			snap.ObjectMeta.Name, err)
-	}
-
-	return err
+	return k.podBackup(ctx, pod, records, results)
 }

@@ -1,39 +1,30 @@
 package k8s
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net/url"
-	"path"
-	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"github.com/PlakarKorp/kloset/connectors"
 	"github.com/PlakarKorp/kloset/connectors/exporter"
 	"github.com/PlakarKorp/kloset/connectors/importer"
 	"github.com/PlakarKorp/kloset/location"
-	"github.com/PlakarKorp/kloset/objects"
 	"github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
 	yamlv3 "go.yaml.in/yaml/v3"
-	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
-	"sigs.k8s.io/yaml"
 )
 
 type k8s struct {
+	proto      string
 	config     *rest.Config
 	clientset  *kubernetes.Clientset
 	dclient    *dynamic.DynamicClient
@@ -41,8 +32,9 @@ type k8s struct {
 	snapClient *versioned.Clientset
 	opts       *connectors.Options
 
-	host string
-	root string
+	host      string
+	namespace string
+	pvcName   string
 
 	portForward bool
 
@@ -52,6 +44,8 @@ type k8s struct {
 
 func init() {
 	importer.Register("k8s", 0, NewImporter)
+	importer.Register("k8s+pvc", 0, NewImporter)
+
 	exporter.Register("k8s", 0, NewExporter)
 }
 
@@ -63,7 +57,7 @@ func NewExporter(ctx context.Context, opts *connectors.Options, name string, par
 	return New(ctx, opts, name, params)
 }
 
-func New(ctx context.Context, opts *connectors.Options, name string, params map[string]string) (*k8s, error) {
+func New(ctx context.Context, opts *connectors.Options, proto string, params map[string]string) (*k8s, error) {
 	var host string
 
 	u, err := url.Parse(params["location"])
@@ -86,14 +80,31 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 		host = "in-cluster"
 	}
 
-	root := strings.Trim(u.Path, "/")
-	if strings.Contains(root, "/") {
-		return nil, fmt.Errorf("bad location: slashes in namespace: %s", params["location"])
-	}
+	var namespace, pvcName, snapClass string
 
-	snapClass := params["volume_snapshot_class_name"]
-	if snapClass == "" {
-		return nil, fmt.Errorf("missing volume_snapshot_class_name option")
+	switch proto {
+	case "k8s+pvc":
+		var found bool
+
+		namespace, pvcName, found = strings.Cut(strings.Trim(u.Path, "/"), "/")
+		if !found || strings.Contains(pvcName, "/") {
+			return nil, fmt.Errorf("bad location: expected namespace/pvc-name but got %s",
+				strings.Trim(u.Path, "/"))
+		}
+
+		snapClass = params["volume_snapshot_class_name"]
+		if snapClass == "" {
+			return nil, fmt.Errorf("missing volume_snapshot_class_name option")
+		}
+
+	case "k8s":
+		namespace = strings.Trim(u.Path, "/")
+		if strings.Contains(namespace, "/") {
+			return nil, fmt.Errorf("bad location: slashes in namespace: %s", params["location"])
+		}
+
+	default:
+		return nil, fmt.Errorf("integration-k8s cannot handle protocol %s", proto)
 	}
 
 	kubeletImage := params["kubelet_image"]
@@ -122,6 +133,7 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 	}
 
 	return &k8s{
+		proto:      proto,
 		config:     config,
 		clientset:  clientset,
 		dclient:    dclient,
@@ -129,7 +141,8 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 		snapClient: snapClient,
 		opts:       opts,
 		host:       host,
-		root:       root,
+		namespace:  namespace,
+		pvcName:    pvcName,
 
 		portForward: true,
 
@@ -138,10 +151,22 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 	}, nil
 }
 
-func (k *k8s) Type() string          { return "k8s" }
-func (k *k8s) Origin() string        { return k.host }
-func (k *k8s) Root() string          { return "/" + k.root }
-func (k *k8s) Flags() location.Flags { return location.FLAG_STREAM | location.FLAG_NEEDACK }
+func (k *k8s) Type() string   { return k.proto }
+func (k *k8s) Origin() string { return k.host }
+
+func (k *k8s) Root() string {
+	if k.proto == "k8s+pvc" {
+		return "/"
+	}
+	return "/" + k.namespace
+}
+
+func (k *k8s) Flags() location.Flags {
+	if k.proto == "k8s+pvc" {
+		return location.FLAG_STREAM | location.FLAG_NEEDACK
+	}
+	return 0
+}
 
 func (k *k8s) Ping(ctx context.Context) error {
 	ns := k.clientset.CoreV1().Namespaces()
@@ -149,132 +174,17 @@ func (k *k8s) Ping(ctx context.Context) error {
 	return err
 }
 
-type inflight struct {
-	mtx      sync.RWMutex
-	inflight map[string]*atomic.Int64
-}
-
 func (k *k8s) Import(ctx context.Context, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
 	defer close(records)
 
-	resources, err := k.discover.ServerPreferredResources()
-	if err != nil {
-		return err
+	switch k.proto {
+	case "k8s":
+		return k.walkResources(ctx, records)
+	case "k8s+pvc":
+		return k.backupPvc(ctx, k.namespace, k.pvcName, records, results)
+	default:
+		return errors.ErrUnsupported
 	}
-
-	inflight := inflight{
-		inflight: make(map[string]*atomic.Int64),
-	}
-
-	go func() {
-		for result := range results {
-			rest, found := strings.CutPrefix(result.Record.Pathname, "/data/pvc/")
-			if !found {
-				continue
-			}
-
-			namespace, rest, _ := strings.Cut(rest, "/")
-			name, _, _ := strings.Cut(rest, "/")
-
-			inflight.mtx.RLock()
-			inflight.inflight[namespace+"/"+name].Add(1)
-			inflight.mtx.RUnlock()
-		}
-	}()
-
-	var wg errgroup.Group
-	wg.SetLimit(k.opts.MaxConcurrency)
-
-	for _, resource := range resources {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		groupVersion, err := schema.ParseGroupVersion(resource.GroupVersion)
-		if err != nil {
-			return err
-		}
-
-		for _, res := range resource.APIResources {
-			// skip non-listable resources
-			if !slices.Contains(res.Verbs, "list") {
-				continue
-			}
-
-			if k.root != "" && !res.Namespaced {
-				continue
-			}
-
-			gvr := groupVersion.WithResource(res.Name)
-
-			wg.Go(func() error {
-				list, err := k.dclient.Resource(gvr).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					return err
-				}
-
-				for _, item := range list.Items {
-					if strings.ToLower(item.GetKind()) != "persistentvolumeclaim" {
-						continue
-					}
-
-					if item.GetLabels()["plakar.io/generated-resource"] == "true" {
-						continue
-					}
-
-					byte, err := yaml.Marshal(item.Object)
-					if err != nil {
-						return err
-					}
-
-					var (
-						gvk   = item.GroupVersionKind()
-						group = "_"
-						name  = item.GetName() + ".yaml"
-						ns    = "_"
-					)
-
-					if res.Namespaced {
-						ns = item.GetNamespace()
-					}
-
-					if k.root != "" && k.root != ns {
-						continue
-					}
-
-					if gvk.Group != "" {
-						group = gvk.Group
-					}
-
-					p := path.Join("/", ns, group, gvk.Kind, gvk.Version, name)
-
-					finfo := objects.FileInfo{
-						Lname:    name,
-						Lsize:    int64(len(byte)),
-						Lmode:    0644,
-						LmodTime: item.GetCreationTimestamp().Time,
-					}
-
-					records <- connectors.NewRecord(p, "", finfo, nil,
-						func() (io.ReadCloser, error) {
-							return io.NopCloser(bytes.NewReader(byte)), nil
-						})
-
-					if gvk.Kind == "PersistentVolumeClaim" {
-						wg.Go(func() error {
-							err := k.backupPvc(ctx, ns, item.GetName(), &inflight, records)
-							log.Println("backupPvc failed with", err)
-							return nil
-						})
-					}
-				}
-
-				return nil
-			})
-		}
-	}
-
-	return wg.Wait()
 }
 
 func (k *k8s) Export(ctx context.Context, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
