@@ -14,12 +14,14 @@ import (
 	"github.com/PlakarKorp/kloset/connectors"
 	"github.com/PlakarKorp/kloset/connectors/importer"
 	"github.com/PlakarKorp/kloset/location"
+	"github.com/google/uuid"
 	vs "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
@@ -152,6 +154,7 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 			Namespace:    ns,
 			Labels: map[string]string{
 				"plakar.io/generated-resource": "true",
+				"plakar.io/service":            uuid.NewString(),
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -170,6 +173,7 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 				Args:  []string{"-p", "8080"},
 				Ports: []corev1.ContainerPort{{
 					Name:          "grpc",
+					Protocol:      "TCP",
 					ContainerPort: 8080,
 				}},
 				VolumeMounts: []corev1.VolumeMount{{
@@ -230,6 +234,38 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 
 func (k *k8s) delpod(ctx context.Context, pod *corev1.Pod) error {
 	return k.clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+}
+
+func (k *k8s) serviceFor(ctx context.Context, pod *corev1.Pod) (*corev1.Service, error) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: pod.Name + "-",
+			Namespace:    pod.Namespace,
+			Labels: map[string]string{
+				"plakar.io/generated-resource": "true",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{{
+				Name:       pod.Spec.Containers[0].Ports[0].Name,
+				Protocol:   pod.Spec.Containers[0].Ports[0].Protocol,
+				Port:       pod.Spec.Containers[0].Ports[0].ContainerPort,
+				TargetPort: intstr.FromInt32(pod.Spec.Containers[0].Ports[0].ContainerPort),
+			}},
+			Selector: pod.ObjectMeta.Labels,
+		},
+	}
+
+	svc, err := k.clientset.CoreV1().Services(pod.Namespace).Create(ctx, svc, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create service: %w", err)
+	}
+
+	return svc, nil
+}
+
+func (k *k8s) delservice(ctx context.Context, svc *corev1.Service) error {
+	return k.clientset.CoreV1().Services(svc.Namespace).Delete(ctx, svc.Name, metav1.DeleteOptions{})
 }
 
 func progress(ctx context.Context, imp importer.Importer, fn func(<-chan *connectors.Record, chan<- *connectors.Result)) error {
@@ -324,7 +360,7 @@ func (k *k8s) consume(ctx context.Context, dest, podpath string, Records chan<- 
 	}
 }
 
-func (k *k8s) podBackup(ctx context.Context, pod *corev1.Pod, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
+func (k *k8s) podBackup(ctx context.Context, pod *corev1.Pod, svc *corev1.Service, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
 	var url string
 	if k.portForward {
 		u := k.clientset.CoreV1().RESTClient().Post().
@@ -362,7 +398,7 @@ func (k *k8s) podBackup(ctx context.Context, pod *corev1.Pod, records chan<- *co
 
 		url = fmt.Sprintf("localhost:%d", ports[0].Local)
 	} else {
-		url = fmt.Sprintf("%s.%s.svc.cluster.local:8080", pod.Name, pod.Namespace)
+		url = fmt.Sprintf("%s.%s.svc.cluster.local:8080", svc.Name, svc.Namespace)
 	}
 
 	return k.consume(ctx, url, "/data", records, results)
@@ -387,5 +423,11 @@ func (k *k8s) backupPvc(ctx context.Context, ns, name string, records chan<- *co
 	}
 	defer k.delpod(ctx, pod)
 
-	return k.podBackup(ctx, pod, records, results)
+	svc, err := k.serviceFor(ctx, pod)
+	if err != nil {
+		return fmt.Errorf("failed to create the service: %w", err)
+	}
+	defer k.delservice(ctx, svc)
+
+	return k.podBackup(ctx, pod, svc, records, results)
 }
