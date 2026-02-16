@@ -147,7 +147,8 @@ func (k *k8s) delpvc(ctx context.Context, pvc *corev1.PersistentVolumeClaim) err
 		Delete(ctx, pvc.Name, metav1.DeleteOptions{})
 }
 
-func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVolumeClaim) (*corev1.Pod, error) {
+func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVolumeClaim, readOnly bool, args ...string) (*corev1.Pod, error) {
+	args = append(args, "-p", "8080")
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "plakar-backup-",
@@ -163,14 +164,14 @@ func (k *k8s) fsServer(ctx context.Context, ns string, pvc *corev1.PersistentVol
 				VolumeSource: corev1.VolumeSource{
 					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 						ClaimName: pvc.Name,
-						ReadOnly:  true,
+						ReadOnly:  readOnly,
 					},
 				},
 			}},
 			Containers: []corev1.Container{{
 				Name:  "kubelet",
 				Image: k.kubeletImage,
-				Args:  []string{"-p", "8080"},
+				Args:  args,
 				Ports: []corev1.ContainerPort{{
 					Name:          "grpc",
 					Protocol:      "TCP",
@@ -428,7 +429,7 @@ func (k *k8s) backupPvc(ctx context.Context, ns, name string, records chan<- *co
 	}
 	defer k.delpvc(ctx, pvc)
 
-	pod, err := k.fsServer(ctx, ns, pvc)
+	pod, err := k.fsServer(ctx, ns, pvc, true)
 	if err != nil {
 		return fmt.Errorf("failed to create the pod: %w", err)
 	}
