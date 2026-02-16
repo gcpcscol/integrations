@@ -12,15 +12,11 @@ import (
 	"github.com/PlakarKorp/kloset/connectors/importer"
 	"github.com/PlakarKorp/kloset/location"
 	"github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
-	yamlv3 "go.yaml.in/yaml/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 )
 
 type k8s struct {
@@ -47,6 +43,7 @@ func init() {
 	importer.Register("k8s+pvc", 0, NewImporter)
 
 	exporter.Register("k8s", 0, NewExporter)
+	exporter.Register("k8s+pvc", 0, NewExporter)
 }
 
 func NewImporter(ctx context.Context, opts *connectors.Options, name string, params map[string]string) (importer.Importer, error) {
@@ -188,62 +185,17 @@ func (k *k8s) Import(ctx context.Context, records chan<- *connectors.Record, res
 }
 
 func (k *k8s) Export(ctx context.Context, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
-	defer close(results)
-
-	var (
-		discovery = memory.NewMemCacheClient(k.discover)
-		mapper    = restmapper.NewDeferredDiscoveryRESTMapper(discovery)
-	)
-
-	for record := range records {
-		if record.Err != nil || record.IsXattr || !record.FileInfo.Lmode.IsRegular() {
-			results <- record.Ok()
-			continue
-		}
-
-		var (
-			obj = &unstructured.Unstructured{Object: map[string]any{}}
-			dec = yamlv3.NewDecoder(record.Reader)
-			err = dec.Decode(&obj.Object)
-		)
-		if err != nil {
-			results <- record.Error(err)
-			return err
-		}
-
-		if meta, ok := obj.Object["metadata"].(map[string]any); ok {
-			delete(meta, "managedFields")
-			delete(meta, "uid")
-		}
-
-		gvk := obj.GroupVersionKind()
-		rest, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err != nil {
-			results <- record.Error(err)
-			return err
-		}
-
-		gvr := rest.Resource
-
-		client := k.dclient.Resource(gvr)
-
-		var ri dynamic.ResourceInterface = client
-		if ns := obj.GetNamespace(); ns != "" {
-			ri = client.Namespace(ns)
-		}
-
-		_, err = ri.Apply(ctx, obj.GetName(), obj, metav1.ApplyOptions{
-			FieldManager: "plakar-k8s-exporter",
-		})
-		if err != nil {
-			results <- record.Error(err)
-			return err
-		}
-
-		results <- record.Ok()
+	switch k.proto {
+	case "k8s":
+		defer close(results)
+		return k.apply(ctx, records, results)
+	case "k8s+pvc":
+		// no need to close results here, it's passed to
+		// exporter.Export which will take care of it.
+		return k.restorePvc(ctx, k.namespace, k.pvcName, records, results)
+	default:
+		return errors.ErrUnsupported
 	}
-
-	return nil
 }
 
 func (k *k8s) Close(ctx context.Context) error {

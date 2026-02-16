@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	gexporter "github.com/PlakarKorp/integration-grpc/exporter"
 	gimporter "github.com/PlakarKorp/integration-grpc/importer"
 	"github.com/PlakarKorp/kloset/connectors"
 	"github.com/PlakarKorp/kloset/connectors/importer"
@@ -140,6 +141,11 @@ func (k *k8s) pvcFromSnap(ctx context.Context, ns string, snap *vs.VolumeSnapsho
 
 	return k.clientset.CoreV1().PersistentVolumeClaims(ns).
 		Create(ctx, pvc, metav1.CreateOptions{})
+}
+
+func (k *k8s) getpvc(ctx context.Context, ns, name string) (*corev1.PersistentVolumeClaim, error) {
+	return k.clientset.CoreV1().PersistentVolumeClaims(ns).
+		Get(ctx, name, metav1.GetOptions{})
 }
 
 func (k *k8s) delpvc(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
@@ -416,6 +422,39 @@ func (k *k8s) podBackup(ctx context.Context, pod *corev1.Pod, svc *corev1.Servic
 	return k.consume(ctx, url, "/data", records, results)
 }
 
+func (k *k8s) podRestore(ctx context.Context, pod *corev1.Pod, svc *corev1.Service, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
+	url, stop, err := k.urlFor(ctx, pod, svc)
+	if err != nil {
+		return err
+	}
+	if stop != nil {
+		defer close(stop)
+	}
+
+	client, err := grpc.NewClient(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("failed to create a grpc client for %s: %w", url, err)
+	}
+
+	opts := &connectors.Options{
+		Hostname:        "plakar-pod",
+		OperatingSystem: "linux",
+		Architecture:    runtime.GOOS,
+		CWD:             "/data",
+		MaxConcurrency:  k.opts.MaxConcurrency,
+	}
+
+	exporter, err := gexporter.NewExporter(ctx, client, opts, "fs", map[string]string{
+		"location": "fs:///data",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to instantiate the exporter: %w", err)
+	}
+	defer exporter.Close(ctx)
+
+	return exporter.Export(ctx, records, results)
+}
+
 func (k *k8s) backupPvc(ctx context.Context, ns, name string, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
 	snap, err := k.gensnap(ctx, ns, name)
 	if err != nil {
@@ -442,4 +481,25 @@ func (k *k8s) backupPvc(ctx context.Context, ns, name string, records chan<- *co
 	defer k.delservice(ctx, svc)
 
 	return k.podBackup(ctx, pod, svc, records, results)
+}
+
+func (k *k8s) restorePvc(ctx context.Context, ns, name string, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
+	pvc, err := k.getpvc(ctx, ns, name)
+	if err != nil {
+		return fmt.Errorf("failed to get the PVC %s.%s: %w", ns, name, err)
+	}
+
+	pod, err := k.fsServer(ctx, ns, pvc, false, "-export")
+	if err != nil {
+		return fmt.Errorf("failed to run the pod: %w", err)
+	}
+	defer k.delpod(ctx, pod)
+
+	svc, err := k.serviceFor(ctx, pod)
+	if err != nil {
+		return fmt.Errorf("failed to create the service: %w", err)
+	}
+	defer k.delservice(ctx, svc)
+
+	return k.podRestore(ctx, pod, svc, records, results)
 }

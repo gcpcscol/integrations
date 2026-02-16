@@ -8,11 +8,12 @@ import (
 	"path"
 
 	sdk "github.com/PlakarKorp/go-kloset-sdk"
+	fsexporter "github.com/PlakarKorp/integration-fs/exporter"
 	fsimporter "github.com/PlakarKorp/integration-fs/importer"
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s [-p port]\n", path.Base(os.Args[0]))
+	fmt.Fprintf(os.Stderr, "usage: %s [-export] [-p port]\n", path.Base(os.Args[0]))
 	os.Exit(1)
 }
 
@@ -24,10 +25,12 @@ func fatal(format string, a ...any) {
 
 func main() {
 	var (
-		port = 8080
+		doexport bool
+		port     = 8080
 	)
 
 	flag.Usage = usage
+	flag.BoolVar(&doexport, "export", false, `run the exporter instead of the fs importer`)
 	flag.IntVar(&port, "p", port, `the port to listen in`)
 	flag.Parse()
 
@@ -41,7 +44,14 @@ func main() {
 	}
 
 	fmt.Fprintf(os.Stderr, "listening on :%d\n", port)
-	if err := sdk.RunImporterOn(fsimporter.NewFSImporter, listener); err != nil {
-		fatal("failed to run the fs importer: %s", err)
+
+	if doexport {
+		if err := sdk.RunExporterOn(fsexporter.NewFSExporter, listener); err != nil {
+			fatal("failed to run the fs exporter: %s", err)
+		}
+	} else {
+		if err := sdk.RunImporterOn(fsimporter.NewFSImporter, listener); err != nil {
+			fatal("failed to run the fs importer: %s", err)
+		}
 	}
 }
