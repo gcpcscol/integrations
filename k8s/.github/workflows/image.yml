@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - go.mod
+      - go.sum
+      - 'kubelet/**'
   workflow_dispatch:
 
 jobs:
