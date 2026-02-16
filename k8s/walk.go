@@ -102,5 +102,4 @@ func (k *k8s) walkResources(ctx context.Context, records chan<- *connectors.Reco
 	}
 
 	return wg.Wait()
-
 }
