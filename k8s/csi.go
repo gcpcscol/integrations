@@ -45,7 +45,7 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 			Source: vs.VolumeSnapshotSource{
 				PersistentVolumeClaimName: &name,
 			},
-			VolumeSnapshotClassName: &k.volumeSnapshotClassName,
+			VolumeSnapshotClassName: &k.volumeSnapshotClass,
 		},
 	}
 

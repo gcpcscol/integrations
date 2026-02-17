@@ -34,8 +34,8 @@ type k8s struct {
 
 	portForward bool
 
-	volumeSnapshotClassName string
-	kubeletImage            string
+	volumeSnapshotClass string
+	kubeletImage        string
 }
 
 func init() {
@@ -89,9 +89,9 @@ func New(ctx context.Context, opts *connectors.Options, proto string, params map
 				strings.Trim(u.Path, "/"))
 		}
 
-		snapClass = params["volume_snapshot_class_name"]
+		snapClass = params["volume_snapshot_class"]
 		if snapClass == "" {
-			return nil, fmt.Errorf("missing volume_snapshot_class_name option")
+			return nil, fmt.Errorf("missing volume_snapshot_class option")
 		}
 
 	case "k8s":
@@ -143,8 +143,8 @@ func New(ctx context.Context, opts *connectors.Options, proto string, params map
 
 		portForward: true,
 
-		volumeSnapshotClassName: snapClass,
-		kubeletImage:            kubeletImage,
+		volumeSnapshotClass: snapClass,
+		kubeletImage:        kubeletImage,
 	}, nil
 }
 

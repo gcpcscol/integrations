@@ -10,7 +10,7 @@ drivers.
 
 ## Configuration
 
-- `volume_snapshot_class_name`: required for PVC backups.  It's the volume snapshot class to use.
+- `volume_snapshot_class`: required for PVC backups.  It's the volume snapshot class to use.
 - `kubelet_image`: optional, used only for PVC backups.  Defaults to a recent version of the kubelet image.
 
 ## Examples
@@ -34,7 +34,7 @@ Restore all the `StatefulSet`s in the `foo` namespace:
 
 Backup the PVC `my-pvc` in the `storage` namespace:
 
-	$ plakar backup -o volume_snapshot_class_name=my-snapclass k8s+pvc://localhost:8001/storage/my-pvc
+	$ plakar backup -o volume_snapshot_class=my-snapclass k8s+pvc://localhost:8001/storage/my-pvc
 
 Restore inside a new, pristine, PersistentVolumeClaim:
 
@@ -50,6 +50,6 @@ Restore inside a new, pristine, PersistentVolumeClaim:
 		 storage: 1Gi
 	  accessModes:
 	   - ReadWriteOnce
-	$ plakar restore -o volume_snapshot_class_name=my-snapclass k8s+pvc://localhost:8001/storage/pristine
+	$ plakar restore -o volume_snapshot_class=my-snapclass k8s+pvc://localhost:8001/storage/pristine
 
 of course it's possible to restore the data inside an already existing PVC as well.
