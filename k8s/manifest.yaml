@@ -9,9 +9,9 @@ connectors:
   executable: k8s-importer
   homepage: https://github.com/PlakarKorp/integration-k8s
   license: ISC
-  protocols: [k8s]
+  protocols: [k8s, k8s+csi]
 - type: exporter
   executable: k8s-exporter
   homepage: https://github.com/PlakarKorp/integration-k8s
   license: ISC
-  protocols: [k8s]
+  protocols: [k8s, k8s+csi]
