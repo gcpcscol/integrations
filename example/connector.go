@@ -133,14 +133,11 @@ func (s *testStore) Open(ctx context.Context) ([]byte, error) {
 }
 
 func (s *testStore) Size(ctx context.Context) (int64, error) {
-	var size int64
-	for _, m := range []*sync.Map{&s.packfiles, &s.states, &s.locks} {
-		m.Range(func(_, value any) bool {
-			size += int64(len(value.([]byte)))
-			return true
-		})
-	}
-	return size, nil
+	// leave to plakar the job of figuring the actual size using
+	// the states.  it's usually implemented only if there is an
+	// easy way of getting the space used by the store, and only
+	// by it.
+	return -1, nil
 }
 
 func (s *testStore) mapFor(res storage.StorageResource) (*sync.Map, error) {
