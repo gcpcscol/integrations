@@ -108,9 +108,9 @@ func (f *testConnector) Close(ctx context.Context) error {
 // Storage connector methods
 
 func (s *testStore) Origin() string        { return "localhost" }
-func (s *testStore) Root() string          { return "memory" }
+func (s *testStore) Root() string          { return "/" }
 func (s *testStore) Type() string          { return "test" }
-func (s *testStore) Flags() location.Flags { return location.FLAG_LOCALFS }
+func (s *testStore) Flags() location.Flags { return 0 }
 
 func (s *testStore) Ping(ctx context.Context) error {
 	return nil
