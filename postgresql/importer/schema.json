@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Plakar PostgreSQL Importer Connector Config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL connection URI: postgresql://[user[:password]@]host[:port][/database]. If a database path is included, only that database is backed up; otherwise all databases are backed up.",
+      "pattern": "^postgresql://.*$"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL server hostname (default: localhost). Overrides the host in the location URI."
+    },
+    "port": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL server port (default: 5432). Overrides the port in the location URI."
+    },
+    "username": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL username. Overrides the username in the location URI."
+    },
+    "password": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL password. Overrides the password in the location URI."
+    },
+    "database": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of the database to back up using pg_dump. If omitted, all databases are backed up using pg_dumpall. Overrides the database in the location URI."
+    },
+    "pg_dump": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Path to the pg_dump binary (default: pg_dump, resolved via $PATH)."
+    },
+    "pg_dumpall": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Path to the pg_dumpall binary (default: pg_dumpall, resolved via $PATH)."
+    }
+  }
+}

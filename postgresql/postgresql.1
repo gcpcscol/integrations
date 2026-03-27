@@ -1,0 +1,112 @@
+.Dd March 27, 2025
+.Dt PLAKAR-POSTGRESQL 1
+.Os
+.Sh NAME
+.Nm plakar-postgresql
+.Nd PostgreSQL backup and restoration connector for Plakar
+.Sh DESCRIPTION
+The
+.Nm
+integration package provides source and destination connectors that back up
+and restore PostgreSQL databases using the standard PostgreSQL client tools
+.Xr pg_dump 1 ,
+.Xr pg_dumpall 1 ,
+.Xr pg_restore 1 ,
+and
+.Xr psql 1 .
+.Pp
+When configured with a specific database name the source connector uses
+.Xr pg_dump 1
+to create a single-database dump in custom format
+.Pq Li -Fc .
+When no database is specified it uses
+.Xr pg_dumpall 1
+to produce a plain-SQL dump of every database on the server.
+.Pp
+The destination connector automatically selects the appropriate restore tool:
+.Xr pg_restore 1
+for custom-format
+.Pq Li .dump
+records, and
+.Xr psql 1
+for plain-SQL
+.Pq Li .sql
+records produced by
+.Xr pg_dumpall 1 .
+.Sh PREREQUISITES
+The following programs must be present in
+.Ev PATH
+on the machine running Plakar:
+.Pp
+.Bl -tag -width "pg_dumpall" -compact
+.It pg_dump
+Single-database backups.
+.It pg_dumpall
+Full-server backups.
+.It pg_restore
+Restoring single-database dumps.
+.It psql
+Restoring full-server dumps.
+.El
+.Sh CONFIGURATION
+Connection details are supplied via a PostgreSQL URI
+.Pq the Ar location
+parameter
+and/or individual fields.
+Individual fields override the corresponding URI component.
+.Bl -tag -width "username"
+.It Ar location
+PostgreSQL connection URI of the form
+.Li postgresql://[user[:password]@]host[:port][/database] .
+.It Ar host
+Server hostname.
+Defaults to
+.Li localhost .
+.It Ar port
+Server port.
+Defaults to
+.Li 5432 .
+.It Ar username
+Authentication username.
+.It Ar password
+Authentication password.
+Passed to the PostgreSQL tools via the
+.Ev PGPASSWORD
+environment variable.
+.It Ar database
+Database name.
+For the
+.Em source
+connector: if set, only this database is backed up
+.Pq pg_dump ;
+if omitted, all databases are backed up
+.Pq pg_dumpall .
+For the
+.Em destination
+connector: target database for
+.Xr pg_restore 1 ;
+if omitted the name is inferred from the dump filename.
+.El
+.Sh EXAMPLES
+Configure a source that backs up a single database and run a backup:
+.Bd -literal -offset indent
+$ plakar source add mypg postgresql://postgres:secret@db.example.com/myapp
+$ plakar backup @mypg
+.Ed
+.Pp
+Configure a source that backs up all databases:
+.Bd -literal -offset indent
+$ plakar source add mypg postgresql://postgres:secret@db.example.com/
+$ plakar backup @mypg
+.Ed
+.Pp
+Configure a destination and restore a snapshot:
+.Bd -literal -offset indent
+$ plakar destination add mypgdst postgresql://postgres:secret@db.example.com/myapp
+$ plakar restore -to @mypgdst <snapid>
+.Ed
+.Sh SEE ALSO
+.Xr pg_dump 1 ,
+.Xr pg_dumpall 1 ,
+.Xr pg_restore 1 ,
+.Xr psql 1

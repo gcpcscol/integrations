@@ -1,0 +1,28 @@
+name: postgresql
+display_name: PostgreSQL
+description: Integration providing import and export capabilities for PostgreSQL databases.
+api_version: v1.1.0
+tier: official
+contact: mailto:help@plakar.io
+connectors:
+  - type: importer
+    executable: postgresqlImporter
+    homepage: https://github.com/PlakarKorp/integration-postgresql
+    license: ISC
+    protocols: [postgres]
+    validator: ./importer/schema.json
+    class: database
+  - type: importer
+    executable: postgresqlBinImporter
+    homepage: https://github.com/PlakarKorp/integration-postgresql
+    license: ISC
+    protocols: [postgres+bin]
+    validator: ./binimporter/schema.json
+    class: database
+  - type: exporter
+    executable: postgresqlExporter
+    homepage: https://github.com/PlakarKorp/integration-postgresql
+    license: ISC
+    protocols: [postgres]
+    validator: ./exporter/schema.json
+    class: database

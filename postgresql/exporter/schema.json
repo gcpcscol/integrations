@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Plakar PostgreSQL Exporter Connector Config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL connection URI: postgresql://[user[:password]@]host[:port][/database]. If a database path is included, it is used as the target for pg_restore when restoring single-database dumps.",
+      "pattern": "^postgresql://.*$"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL server hostname (default: localhost). Overrides the host in the location URI."
+    },
+    "port": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL server port (default: 5432). Overrides the port in the location URI."
+    },
+    "username": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL username. Overrides the username in the location URI."
+    },
+    "password": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL password. Overrides the password in the location URI."
+    },
+    "database": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target database for pg_restore when restoring a single-database dump. If omitted, the database name is inferred from the dump filename. Not used when restoring a full pg_dumpall dump (all.sql)."
+    },
+    "no_owner": {
+      "type": "string",
+      "enum": ["true", "false"],
+      "description": "When set to true, passes -O (--no-owner) to pg_restore so that ALTER OWNER commands are skipped. Useful when the roles from the source server do not exist on the target server."
+    },
+    "single_transaction": {
+      "type": "string",
+      "enum": ["true", "false"],
+      "description": "When set to true, passes -1 (--single-transaction) to pg_restore so the entire restore runs inside a single transaction. Any error causes a full rollback, preventing a partially-restored database."
+    }
+  }
+}

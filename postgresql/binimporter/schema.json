@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Plakar PostgreSQL Binary Importer Connector Config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Connection URI: postgres+bin://[user[:password]@]host[:port]",
+      "pattern": "^postgres\\+bin://.*$"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL server hostname (default: localhost). Overrides the host in the location URI."
+    },
+    "port": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL server port (default: 5432). Overrides the port in the location URI."
+    },
+    "username": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL replication username. Overrides the username in the location URI."
+    },
+    "password": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PostgreSQL password. Overrides the password in the location URI."
+    },
+    "pg_basebackup": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Path to the pg_basebackup binary (default: pg_basebackup, resolved via $PATH)."
+    }
+  }
+}
