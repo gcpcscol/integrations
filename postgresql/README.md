@@ -2,105 +2,209 @@
 
 ## Overview
 
-**PostgreSQL** is a powerful, open-source relational database system.
+This integration provides two independent backup strategies for PostgreSQL:
 
-This integration allows you to:
+| Protocol | Tool | Granularity | Restore requires |
+|---|---|---|---|
+| `postgresql://` | `pg_dump` / `pg_dumpall` | logical (SQL) | a running PostgreSQL server |
+| `postgres+bin://` | `pg_basebackup` | physical (binary) | any file-restore connector |
 
-- **Back up a single PostgreSQL database** into a Kloset repository using `pg_dump` (custom format).
-- **Back up all databases** on a PostgreSQL server into a Kloset repository using `pg_dumpall` (plain SQL format).
-- **Restore a single database** from a snapshot using `pg_restore`.
-- **Restore all databases** from a snapshot using `psql`.
+---
 
-## Prerequisites
+## Logical backup — `postgresql://`
 
-The following PostgreSQL client tools must be available in `$PATH` on the machine running Plakar:
+### How it works
 
-- `pg_dump` — for single-database backups
-- `pg_dumpall` — for full-server backups
-- `pg_restore` — for restoring single-database dumps
-- `psql` — for restoring full-server dumps
+The importer connects to a running PostgreSQL server and produces a logical
+dump — a portable, version-independent representation of the data.
 
-These are typically installed as part of the `postgresql-client` package on most Linux distributions, or via Homebrew (`brew install postgresql`) on macOS.
+- **Single database** (`database` parameter or `/dbname` in the URI):
+  runs `pg_dump -Fc` (custom binary format) and stores **one record**
+  named `/<dbname>.dump` in the snapshot.
 
-## Configuration
+- **All databases** (no `database` parameter):
+  runs `pg_dumpall` (plain SQL format) and stores **one record**
+  named `/all.sql` in the snapshot.  This includes global objects such
+  as roles and tablespaces that `pg_dump` does not capture.
 
-Both the source (importer) and destination (exporter) connectors share the same set of configuration parameters.
+Restore dispatches on the file extension: `.dump` files are fed to
+`pg_restore`; `.sql` files are fed to `psql`.
 
-Connection details can be provided as a PostgreSQL URI via the `location` parameter, as individual fields, or as a combination of both (individual fields override the corresponding URI component).
+### Pros and cons
 
-| Parameter  | Required | Description |
-|------------|----------|-------------|
-| `location` | No       | PostgreSQL connection URI: `postgresql://[user[:password]@]host[:port][/database]` |
-| `host`     | No       | PostgreSQL server hostname (default: `localhost`) |
-| `port`     | No       | PostgreSQL server port (default: `5432`) |
-| `username` | No       | PostgreSQL username |
-| `password` | No       | PostgreSQL password |
-| `database` | No       | Database name. **Importer**: if set, only that database is backed up (`pg_dump`); if omitted, all databases are backed up (`pg_dumpall`). **Exporter**: if set, overrides the restore target database for single-database dumps; if omitted, the name is inferred from the dump filename. |
+**Pros**
+- Works across PostgreSQL major versions — dump on PG 15, restore on PG 16.
+- Selectively back up individual databases or the whole cluster.
+- The custom format (`-Fc`) supports selective table/schema restore with
+  `pg_restore -t`.
+- No server downtime required.
 
-### Single-database vs. full-server backup
+**Cons**
+- Requires a live, accessible PostgreSQL server for both backup and restore.
+- Logical dumps do not capture low-level objects (e.g. unlogged tables'
+  content, certain system catalog details).
+- Restore time scales with data volume — large databases take longer than
+  a binary restore.
 
-- **Single database**: set `database` (or include `/dbname` in the `location` URI).
-  The importer runs `pg_dump -Fc` and stores one record named `/<dbname>.dump`.
-  The exporter restores it with `pg_restore`.
+### Prerequisites
 
-- **All databases**: leave `database` empty (and omit the database path from the URI).
-  The importer runs `pg_dumpall` and stores one record named `/all.sql`.
-  The exporter restores it with `psql` connecting to the `postgres` maintenance database.
+The following PostgreSQL client tools must be in `$PATH` on the machine
+running Plakar (typically provided by the `postgresql-client` package):
 
-## Examples
+- `pg_dump` — single-database backup
+- `pg_dumpall` — full-server backup
+- `pg_restore` — single-database restore
+- `psql` — full-server restore and connectivity checks
 
-### Back up a single database
+### Importer options (`postgresql://`)
 
-```bash
-# Configure a source for a single database
-$ plakar source add mypg postgresql://postgres:secret@db.example.com/myapp
+| Parameter | Default | Description |
+|---|---|---|
+| `location` | — | Connection URI: `postgresql://[user[:password]@]host[:port][/database]` |
+| `host` | `localhost` | Server hostname. Overrides the URI host. |
+| `port` | `5432` | Server port. Overrides the URI port. |
+| `username` | — | PostgreSQL username. Overrides the URI user. |
+| `password` | — | PostgreSQL password. Overrides the URI password. |
+| `database` | — | Database to back up. If omitted, all databases are backed up via `pg_dumpall`. Overrides the URI path. |
+| `compress` | `false` | Enable `pg_dump` compression. By default dumps are stored uncompressed so that Plakar's own compression is not degraded. |
+| `pg_dump` | `pg_dump` | Path to the `pg_dump` binary. |
+| `pg_dumpall` | `pg_dumpall` | Path to the `pg_dumpall` binary. |
 
-# Back up to the default store
-$ plakar backup @mypg
-```
+### Exporter options (`postgresql://`)
 
-Alternatively, using separate fields:
+| Parameter | Default | Description |
+|---|---|---|
+| `location` | — | Connection URI: `postgresql://[user[:password]@]host[:port][/database]` |
+| `host` | `localhost` | Server hostname. Overrides the URI host. |
+| `port` | `5432` | Server port. Overrides the URI port. |
+| `username` | — | PostgreSQL username. Overrides the URI user. |
+| `password` | — | PostgreSQL password. Overrides the URI password. |
+| `database` | — | Target database for restore. The database is created if it does not exist. If omitted, the name is inferred from the dump filename (e.g. `myapp.dump` → `myapp`). |
+| `no_owner` | `false` | Pass `--no-owner` to `pg_restore`, skipping `ALTER OWNER` statements. Useful when roles from the source server do not exist on the target. |
+| `exit_on_error` | `true` | Stop on the first restore error. Set to `false` to continue past errors. Applies to both `pg_restore` (`-e`) and `psql` (`ON_ERROR_STOP=1`). |
 
-```bash
-$ plakar source add mypg postgresql:// \
-    host=db.example.com \
-    username=postgres \
-    password=secret \
-    database=myapp
-```
-
-### Back up all databases
-
-```bash
-# Configure a source without specifying a database (triggers pg_dumpall)
-$ plakar source add mypg postgresql://postgres:secret@db.example.com/
-
-# Back up to the default store
-$ plakar backup @mypg
-```
-
-### Restore a single database
-
-```bash
-# Configure a destination pointing to the target server and database
-$ plakar destination add mypgdst postgresql://postgres:secret@db.example.com/myapp
-
-# Restore a snapshot to that destination
-$ plakar restore -to @mypgdst <snapid>
-```
-
-If the `database` parameter is omitted from the destination, the target database
-name is inferred from the dump filename in the snapshot (e.g. `myapp.dump` → `myapp`).
-
-### Restore all databases
+### Examples
 
 ```bash
-# Configure a destination without a specific database
-$ plakar destination add mypgdst postgresql://postgres:secret@db.example.com/
+# Back up a single database
+plakar source add mypg postgresql://postgres:secret@db.example.com/myapp
+plakar backup @mypg
 
-# Restore a full pg_dumpall snapshot
-$ plakar restore -to @mypgdst <snapid>
+# Back up all databases (roles, tablespaces, and data)
+plakar source add mypg postgresql://postgres:secret@db.example.com/
+plakar backup @mypg
+
+# Restore a single database (created automatically if absent)
+plakar destination add mypgdst postgresql://postgres:secret@db.example.com/myapp
+plakar restore -to @mypgdst <snapid>
+
+# Restore all databases to a fresh server
+plakar destination add mypgdst postgresql://postgres:secret@db.example.com/
+plakar restore -to @mypgdst <snapid>
+
+# Restore, skipping owner assignment (e.g. roles differ on target)
+plakar destination add mypgdst postgresql://postgres:secret@db.example.com/myapp \
+    no_owner=true
+plakar restore -to @mypgdst <snapid>
 ```
 
-`psql` will connect to the `postgres` maintenance database and execute the SQL
-script, which recreates all databases, roles, and data.
+---
+
+## Physical backup — `postgres+bin://`
+
+### How it works
+
+The importer runs `pg_basebackup -D - -F tar -X fetch`, which streams a
+tar archive of the entire PostgreSQL data directory (`PGDATA`) directly
+from the server's replication interface.  Each file inside the tar is
+stored as an individual record in the snapshot, preserving paths,
+permissions, and timestamps.
+
+Because the backup is at the file level, it captures the **whole cluster**
+— all databases, configuration files, and WAL segments needed for a
+consistent recovery.
+
+No subpath can be specified in the URI: `pg_basebackup` always backs up
+the entire cluster.
+
+### Pros and cons
+
+**Pros**
+- Fast backup and restore regardless of data volume — it is a file copy,
+  not a query.
+- Captures everything: all databases, configuration, global objects, and
+  WAL in a single operation.
+- The restored cluster can be started directly with any PostgreSQL binary
+  of the **same major version** — no running server needed at restore time.
+- Suitable as a base for Point-in-Time Recovery (PITR) when combined with
+  WAL archiving.
+
+**Cons**
+- Version-locked: the backup must be restored with the same PostgreSQL
+  major version.
+- Cannot selectively restore a single database or table.
+- Requires a replication-capable user (or superuser) and
+  `wal_level >= replica` on the server.
+- The PostgreSQL server must be **stopped** before the data directory is
+  replaced with the restored files.
+
+### Prerequisites
+
+`pg_basebackup` must be in `$PATH` on the machine running Plakar
+(same `postgresql-client` package, or `postgresql` on macOS via Homebrew).
+
+The PostgreSQL server must have:
+- `wal_level = replica` (or higher) in `postgresql.conf`
+- A user with the `REPLICATION` privilege (or a superuser)
+- `pg_hba.conf` allowing a replication connection from the backup host
+
+### Importer options (`postgres+bin://`)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `location` | — | Connection URI: `postgres+bin://[user[:password]@]host[:port]`. A subpath is not allowed. |
+| `host` | `localhost` | Server hostname. Overrides the URI host. |
+| `port` | `5432` | Server port. Overrides the URI port. |
+| `username` | — | PostgreSQL replication username. Overrides the URI user. |
+| `password` | — | PostgreSQL password. Overrides the URI password. |
+| `pg_basebackup` | `pg_basebackup` | Path to the `pg_basebackup` binary. |
+
+### Restoring a physical backup
+
+There is no dedicated exporter for `postgres+bin://`.  Because the snapshot
+contains plain files, any file-restore connector can be used to write them
+back to disk.  The restored directory is a valid PostgreSQL data directory
+that can be started directly.
+
+```bash
+# Restore the data directory to ./pgdata using the built-in fs connector
+plakar restore -to ./pgdata <snapid>
+
+# Start PostgreSQL against the restored data directory
+docker run --rm \
+    -v "$PWD/pgdata:/var/lib/postgresql/data" \
+    postgres:<postgres_version>
+```
+
+Replace `<postgres_version>` with the **same major version** that was
+running when the backup was taken (e.g. `17`).
+
+> **Important:** the data directory must not be in use by a running
+> PostgreSQL instance before restoration begins.  Stop the server first,
+> or restore to a fresh directory as shown above.
+
+### Examples
+
+```bash
+# Back up the entire cluster
+plakar source add mypg postgres+bin://replicator:secret@db.example.com
+plakar backup @mypg
+
+# Restore to a local directory and start with Docker
+plakar restore -to ./pgdata <snapid>
+docker run --rm -v "$PWD/pgdata:/var/lib/postgresql/data" postgres:17
+
+# Restore to a remote host via SFTP
+plakar restore -to sftp://user@host/var/lib/postgresql/data <snapid>
+# then on the remote host: pg_ctl -D /var/lib/postgresql/data start
+```
