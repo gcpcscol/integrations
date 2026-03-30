@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/PlakarKorp/kloset/connectors"
@@ -162,23 +163,27 @@ loop:
 // tool based on the record's file extension.
 func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error {
 	if strings.HasSuffix(record.Pathname, ".dump") {
-		return p.pgRestore(ctx, record.Reader)
+		return p.pgRestore(ctx, record.Reader, record.Pathname)
 	}
 	return p.psqlRestore(ctx, record.Reader)
 }
 
-// pgRestore restores a custom-format dump produced by pg_dump -Fc -C.
-// -C tells pg_restore to create the target database itself; the archive
-// contains the database name so no inference from the filename is needed.
-// -d is used only for the initial maintenance-database connection.
+// pgRestore restores a custom-format dump produced by pg_dump -Fc.
+// If a target database is configured, it is created when it does not exist
+// yet and the dump is restored into it.  Otherwise the database name is
+// inferred from the dump filename (e.g. "/mydb.dump" → "mydb").
 // The dump is streamed directly from r into pg_restore's stdin.
-func (p *Exporter) pgRestore(ctx context.Context, r io.Reader) error {
-	connectDB := p.database
-	if connectDB == "" {
-		connectDB = "postgres"
+func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) error {
+	targetDB := p.database
+	if targetDB != "" {
+		if err := p.ensureDatabase(ctx, targetDB); err != nil {
+			return err
+		}
+	} else {
+		targetDB = strings.TrimSuffix(filepath.Base(pathname), ".dump")
 	}
 
-	args := []string{"-h", p.host, "-p", p.port, "-w", "-C", "-d", connectDB}
+	args := []string{"-h", p.host, "-p", p.port, "-w", "-d", targetDB}
 	if p.username != "" {
 		args = append(args, "-U", p.username)
 	}
@@ -188,6 +193,23 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader) error {
 	cmd.Env = p.pgEnv()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("pg_restore: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// ensureDatabase creates dbname if it does not already exist.
+func (p *Exporter) ensureDatabase(ctx context.Context, dbname string) error {
+	args := []string{"-h", p.host, "-p", p.port, "-w", "-d", "postgres",
+		"-c", fmt.Sprintf(`CREATE DATABASE "%s"`, dbname)}
+	if p.username != "" {
+		args = append(args, "-U", p.username)
+	}
+	cmd := exec.CommandContext(ctx, "psql", args...)
+	cmd.Stdin = nil
+	cmd.Env = p.pgEnv()
+	out, err := cmd.CombinedOutput()
+	if err != nil && !strings.Contains(string(out), "already exists") {
+		return fmt.Errorf("create database %q: %w: %s", dbname, err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
