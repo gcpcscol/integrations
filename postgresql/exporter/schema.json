@@ -36,9 +36,8 @@
       "description": "Target database for pg_restore when restoring a single-database dump. If omitted, the database name is inferred from the dump filename. Not used when restoring a full pg_dumpall dump (all.sql)."
     },
     "no_owner": {
-      "type": "string",
-      "enum": ["true", "false"],
-      "description": "When set to true, passes -O (--no-owner) to pg_restore so that ALTER OWNER commands are skipped. Useful when the roles from the source server do not exist on the target server."
+      "type": "boolean",
+      "description": "When true, passes --no-owner to pg_restore so that ALTER OWNER commands are skipped. Useful when the roles from the source server do not exist on the target server."
     },
     "single_transaction": {
       "type": "string",

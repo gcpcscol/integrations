@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/PlakarKorp/kloset/connectors"
@@ -25,6 +26,7 @@ type Exporter struct {
 	username string
 	password string
 	database string // target database for pg_restore (single-db restores)
+	noOwner  bool   // pass --no-owner to pg_restore
 }
 
 func NewExporter(ctx context.Context, opts *connectors.Options, name string, config map[string]string) (exporter.Exporter, error) {
@@ -72,6 +74,13 @@ func NewExporter(ctx context.Context, opts *connectors.Options, name string, con
 	}
 	if db, ok := config["database"]; ok && db != "" {
 		exp.database = db
+	}
+	if v, ok := config["no_owner"]; ok && v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("no_owner: %w", err)
+		}
+		exp.noOwner = b
 	}
 	return exp, nil
 }
@@ -183,6 +192,9 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 	}
 
 	args := []string{"-h", p.host, "-p", p.port, "-w", "-e", "-d", targetDB}
+	if p.noOwner {
+		args = append(args, "--no-owner")
+	}
 	if p.username != "" {
 		args = append(args, "-U", p.username)
 	}
