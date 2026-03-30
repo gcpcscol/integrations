@@ -125,7 +125,7 @@ func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record
 // one record named /<dbname>.dump whose content is streamed directly from
 // pg_dump's stdout.
 func (p *Importer) dumpDatabase(ctx context.Context, records chan<- *connectors.Record, dbname string) error {
-	args := []string{"-h", p.host, "-p", p.port, "-w", "-Fc"}
+	args := []string{"-h", p.host, "-p", p.port, "-w", "-Fc", "-C"}
 	if !p.compress {
 		args = append(args, "-Z0")
 	}

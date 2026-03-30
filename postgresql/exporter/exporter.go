@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/PlakarKorp/kloset/connectors"
@@ -163,23 +162,23 @@ loop:
 // tool based on the record's file extension.
 func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error {
 	if strings.HasSuffix(record.Pathname, ".dump") {
-		return p.pgRestore(ctx, record.Reader, record.Pathname)
+		return p.pgRestore(ctx, record.Reader)
 	}
 	return p.psqlRestore(ctx, record.Reader)
 }
 
-// pgRestore restores a custom-format dump produced by pg_dump -Fc.  The target
-// database is taken from the exporter's database field; if that is empty, the
-// name is inferred from the dump filename (e.g. "/mydb.dump" → "mydb").
+// pgRestore restores a custom-format dump produced by pg_dump -Fc -C.
+// -C tells pg_restore to create the target database itself; the archive
+// contains the database name so no inference from the filename is needed.
+// -d is used only for the initial maintenance-database connection.
 // The dump is streamed directly from r into pg_restore's stdin.
-func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) error {
-	targetDB := p.database
-	if targetDB == "" {
-		base := filepath.Base(pathname)
-		targetDB = strings.TrimSuffix(base, ".dump")
+func (p *Exporter) pgRestore(ctx context.Context, r io.Reader) error {
+	connectDB := p.database
+	if connectDB == "" {
+		connectDB = "postgres"
 	}
 
-	args := []string{"-h", p.host, "-p", p.port, "-w", "-d", targetDB}
+	args := []string{"-h", p.host, "-p", p.port, "-w", "-C", "-d", connectDB}
 	if p.username != "" {
 		args = append(args, "-U", p.username)
 	}
