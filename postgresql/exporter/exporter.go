@@ -182,7 +182,7 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 		return err
 	}
 
-	args := []string{"-h", p.host, "-p", p.port, "-w", "-d", targetDB}
+	args := []string{"-h", p.host, "-p", p.port, "-w", "-e", "-d", targetDB}
 	if p.username != "" {
 		args = append(args, "-U", p.username)
 	}
