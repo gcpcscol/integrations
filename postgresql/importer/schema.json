@@ -44,6 +44,10 @@
       "type": "string",
       "minLength": 1,
       "description": "Path to the pg_dumpall binary (default: pg_dumpall, resolved via $PATH)."
+    },
+    "compress": {
+      "type": "boolean",
+      "description": "Enable pg_dump compression (default: false). By default dumps are uncompressed so that Plakar's own compression is not degraded."
     }
   }
 }

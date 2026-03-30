@@ -27,6 +27,7 @@ type Importer struct {
 	username  string
 	password  string
 	database  string // empty means back up all databases via pg_dumpall
+	compress  bool   // enable pg_dump compression (default: false)
 	pgDump    string // path to pg_dump binary (default: "pg_dump")
 	pgDumpAll string // path to pg_dumpall binary (default: "pg_dumpall")
 }
@@ -85,6 +86,9 @@ func NewImporter(appCtx context.Context, opts *connectors.Options, name string, 
 	if v, ok := config["pg_dumpall"]; ok && v != "" {
 		imp.pgDumpAll = v
 	}
+	if v, ok := config["compress"]; ok && v == "true" {
+		imp.compress = true
+	}
 
 	return imp, nil
 }
@@ -116,6 +120,9 @@ func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record
 // pg_dump's stdout.
 func (p *Importer) dumpDatabase(ctx context.Context, records chan<- *connectors.Record, dbname string) error {
 	args := []string{"-h", p.host, "-p", p.port, "-w", "-Fc"}
+	if !p.compress {
+		args = append(args, "-Z0")
+	}
 	if p.username != "" {
 		args = append(args, "-U", p.username)
 	}
