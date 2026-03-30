@@ -6,12 +6,12 @@ This integration provides two independent backup strategies for PostgreSQL:
 
 | Protocol | Tool | Granularity | Restore requires |
 |---|---|---|---|
-| `postgresql://` | `pg_dump` / `pg_dumpall` | logical (SQL) | a running PostgreSQL server |
+| `postgres://` | `pg_dump` / `pg_dumpall` | logical (SQL) | a running PostgreSQL server |
 | `postgres+bin://` | `pg_basebackup` | physical (binary) | any file-restore connector |
 
 ---
 
-## Logical backup — `postgresql://`
+## Logical backup — `postgres://`
 
 ### How it works
 
@@ -56,11 +56,11 @@ running Plakar (typically provided by the `postgresql-client` package):
 - `pg_restore` — single-database restore
 - `psql` — full-server restore and connectivity checks
 
-### Importer options (`postgresql://`)
+### Importer options (`postgres://`)
 
 | Parameter | Default | Description |
 |---|---|---|
-| `location` | — | Connection URI: `postgresql://[user[:password]@]host[:port][/database]` |
+| `location` | — | Connection URI: `postgres://[user[:password]@]host[:port][/database]` |
 | `host` | `localhost` | Server hostname. Overrides the URI host. |
 | `port` | `5432` | Server port. Overrides the URI port. |
 | `username` | — | PostgreSQL username. Overrides the URI user. |
@@ -70,11 +70,11 @@ running Plakar (typically provided by the `postgresql-client` package):
 | `pg_dump` | `pg_dump` | Path to the `pg_dump` binary. |
 | `pg_dumpall` | `pg_dumpall` | Path to the `pg_dumpall` binary. |
 
-### Exporter options (`postgresql://`)
+### Exporter options (`postgres://`)
 
 | Parameter | Default | Description |
 |---|---|---|
-| `location` | — | Connection URI: `postgresql://[user[:password]@]host[:port][/database]` |
+| `location` | — | Connection URI: `postgres://[user[:password]@]host[:port][/database]` |
 | `host` | `localhost` | Server hostname. Overrides the URI host. |
 | `port` | `5432` | Server port. Overrides the URI port. |
 | `username` | — | PostgreSQL username. Overrides the URI user. |
@@ -87,23 +87,23 @@ running Plakar (typically provided by the `postgresql-client` package):
 
 ```bash
 # Back up a single database
-plakar source add mypg postgresql://postgres:secret@db.example.com/myapp
+plakar source add mypg postgres://postgres:secret@db.example.com/myapp
 plakar backup @mypg
 
 # Back up all databases (roles, tablespaces, and data)
-plakar source add mypg postgresql://postgres:secret@db.example.com/
+plakar source add mypg postgres://postgres:secret@db.example.com/
 plakar backup @mypg
 
 # Restore a single database (created automatically if absent)
-plakar destination add mypgdst postgresql://postgres:secret@db.example.com/myapp
+plakar destination add mypgdst postgres://postgres:secret@db.example.com/myapp
 plakar restore -to @mypgdst <snapid>
 
 # Restore all databases to a fresh server
-plakar destination add mypgdst postgresql://postgres:secret@db.example.com/
+plakar destination add mypgdst postgres://postgres:secret@db.example.com/
 plakar restore -to @mypgdst <snapid>
 
 # Restore, skipping owner assignment (e.g. roles differ on target)
-plakar destination add mypgdst postgresql://postgres:secret@db.example.com/myapp \
+plakar destination add mypgdst postgres://postgres:secret@db.example.com/myapp \
     no_owner=true
 plakar restore -to @mypgdst <snapid>
 ```
