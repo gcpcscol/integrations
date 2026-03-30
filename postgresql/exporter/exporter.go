@@ -251,6 +251,9 @@ func (p *Exporter) ensureDatabase(ctx context.Context, dbname string) error {
 // The dump is streamed directly from r into psql's stdin.
 func (p *Exporter) psqlRestore(ctx context.Context, r io.Reader) error {
 	args := []string{"-h", p.host, "-p", p.port, "-w", "-d", "postgres"}
+	if p.exitOnError {
+		args = append(args, "-v", "ON_ERROR_STOP=1")
+	}
 	if p.username != "" {
 		args = append(args, "-U", p.username)
 	}
