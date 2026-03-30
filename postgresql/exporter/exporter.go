@@ -25,8 +25,6 @@ type Exporter struct {
 	username string
 	password string
 	database string // target database for pg_restore (single-db restores)
-	noOwner           bool // pass -O to pg_restore: skip ALTER OWNER commands
-	singleTransaction bool // pass -1 to pg_restore: wrap restore in one transaction
 }
 
 func NewExporter(ctx context.Context, opts *connectors.Options, name string, config map[string]string) (exporter.Exporter, error) {
@@ -75,13 +73,6 @@ func NewExporter(ctx context.Context, opts *connectors.Options, name string, con
 	if db, ok := config["database"]; ok && db != "" {
 		exp.database = db
 	}
-	if v, ok := config["no_owner"]; ok && v == "true" {
-		exp.noOwner = true
-	}
-	if v, ok := config["single_transaction"]; ok && v == "true" {
-		exp.singleTransaction = true
-	}
-
 	return exp, nil
 }
 
@@ -118,7 +109,10 @@ func (p *Exporter) Ping(ctx context.Context) error {
 	}
 	return nil
 }
-func (p *Exporter) Close(ctx context.Context) error { return nil }
+
+func (p *Exporter) Close(ctx context.Context) error {
+	return nil
+}
 
 // Export iterates over the records channel and restores each dump record into
 // the configured PostgreSQL server.  Records ending in ".dump" are restored
@@ -189,13 +183,6 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 	if p.username != "" {
 		args = append(args, "-U", p.username)
 	}
-	if p.noOwner {
-		args = append(args, "-O")
-	}
-	if p.singleTransaction {
-		args = append(args, "-1")
-	}
-	// No filename argument: pg_restore reads the archive from stdin.
 
 	cmd := exec.CommandContext(ctx, "pg_restore", args...)
 	cmd.Stdin = r
