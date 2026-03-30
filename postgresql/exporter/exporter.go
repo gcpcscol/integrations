@@ -21,18 +21,20 @@ func init() {
 }
 
 type Exporter struct {
-	host     string
-	port     string
-	username string
-	password string
-	database string // target database for pg_restore (single-db restores)
-	noOwner  bool   // pass --no-owner to pg_restore
+	host        string
+	port        string
+	username    string
+	password    string
+	database    string // target database for pg_restore (single-db restores)
+	noOwner     bool   // pass --no-owner to pg_restore
+	exitOnError bool   // pass -e to pg_restore (default: true)
 }
 
 func NewExporter(ctx context.Context, opts *connectors.Options, name string, config map[string]string) (exporter.Exporter, error) {
 	exp := &Exporter{
-		host: "localhost",
-		port: "5432",
+		host:        "localhost",
+		port:        "5432",
+		exitOnError: true,
 	}
 
 	if loc, ok := config["location"]; ok && loc != "" {
@@ -81,6 +83,13 @@ func NewExporter(ctx context.Context, opts *connectors.Options, name string, con
 			return nil, fmt.Errorf("no_owner: %w", err)
 		}
 		exp.noOwner = b
+	}
+	if v, ok := config["exit_on_error"]; ok && v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("exit_on_error: %w", err)
+		}
+		exp.exitOnError = b
 	}
 	return exp, nil
 }
@@ -191,7 +200,10 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 		return err
 	}
 
-	args := []string{"-h", p.host, "-p", p.port, "-w", "-e", "-d", targetDB}
+	args := []string{"-h", p.host, "-p", p.port, "-w", "-d", targetDB}
+	if p.exitOnError {
+		args = append(args, "-e")
+	}
 	if p.noOwner {
 		args = append(args, "--no-owner")
 	}

@@ -39,6 +39,10 @@
       "type": "boolean",
       "description": "When true, passes --no-owner to pg_restore so that ALTER OWNER commands are skipped. Useful when the roles from the source server do not exist on the target server."
     },
+    "exit_on_error": {
+      "type": "boolean",
+      "description": "When true (the default), passes -e to pg_restore so it exits on the first error. Set to false to continue restoring after errors."
+    },
     "single_transaction": {
       "type": "string",
       "enum": ["true", "false"],
