@@ -158,12 +158,25 @@ func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record
 		if err := p.emitManifest(ctx, records, "custom"); err != nil {
 			return err
 		}
+		if err := p.dumpGlobals(ctx, records); err != nil {
+			return err
+		}
 		return p.dumpDatabase(ctx, records, p.database)
 	}
 	if err := p.emitManifest(ctx, records, "sql"); err != nil {
 		return err
 	}
 	return p.dumpAll(ctx, records)
+}
+
+// dumpGlobals runs pg_dumpall --globals-only and emits one record named /globals.sql.
+// It captures roles and tablespaces that pg_dump does not include.
+func (p *Importer) dumpGlobals(ctx context.Context, records chan<- *connectors.Record) error {
+	args := []string{"-h", p.host, "-p", p.port, "-w", "--globals-only"}
+	if p.username != "" {
+		args = append(args, "-U", p.username)
+	}
+	return p.emitRecord(ctx, records, p.pgDumpAll, args, "/globals.sql")
 }
 
 // dumpDatabase runs pg_dump -Fc and emits one record named /<dbname>.dump.

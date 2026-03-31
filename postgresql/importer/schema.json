@@ -51,7 +51,7 @@
     "pg_dumpall": {
       "type": "string",
       "minLength": 1,
-      "description": "Path to the pg_dumpall binary (default: pg_dumpall, resolved via $PATH)."
+      "description": "Path to the pg_dumpall binary (default: pg_dumpall, resolved via $PATH). Also used for the globals-only dump when backing up a single database."
     },
     "compress": {
       "type": "boolean",
