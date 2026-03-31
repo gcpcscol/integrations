@@ -21,7 +21,7 @@ import (
 )
 
 func init() {
-	importer.Register("postgres+bin", 0, NewBinImporter)
+	importer.Register("postgresql+bin", 0, NewBinImporter)
 }
 
 type BinImporter struct {
