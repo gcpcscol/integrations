@@ -259,3 +259,7 @@ plakar destination rm mydb
 plakar destination add mydb postgres://postgres@localhost:9999 password=postgres
 plakar restore -to @mydb <snapid>
 ```
+
+---
+
+> This integration was mostly vibe-coded with [Claude](https://claude.ai) but has been manually tested and reviewed throughout.
