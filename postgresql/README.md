@@ -140,8 +140,7 @@ the entire cluster.
   WAL in a single operation.
 - The restored cluster can be started directly with any PostgreSQL binary
   of the **same major version** — no running server needed at restore time.
-- Suitable as a base for Point-in-Time Recovery (PITR) when combined with
-  WAL archiving.
+
 
 **Cons**
 - Version-locked: the backup must be restored with the same PostgreSQL
