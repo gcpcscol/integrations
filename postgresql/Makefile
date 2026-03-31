@@ -16,6 +16,7 @@ build:
 	${GO} build -v -o postgresqlBinImporter${EXT} ./plugin/binimporter
 
 package: build
+	rm -f $(PTAR)
 	$(PLAKAR) pkg create ./manifest.yaml $(VERSION)
 
 uninstall:
