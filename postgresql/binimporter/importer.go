@@ -145,7 +145,7 @@ func (p *BinImporter) Import(ctx context.Context, records chan<- *connectors.Rec
 			return nil
 		}
 
-		name := path.Join("/" + hdr.Name)
+		name := path.Join("/data/" + hdr.Name)
 		records <- &connectors.Record{
 			Pathname: name,
 			Target:   hdr.Linkname,
