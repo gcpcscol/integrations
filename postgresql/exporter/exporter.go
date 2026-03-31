@@ -209,13 +209,14 @@ loop:
 }
 
 func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error {
-	if record.Pathname == "/manifest.json" {
-		return nil
-	}
 	if strings.HasSuffix(record.Pathname, ".dump") {
 		return p.pgRestore(ctx, record.Reader, record.Pathname)
 	}
-	return p.psqlRestore(ctx, record.Reader)
+	if strings.HasSuffix(record.Pathname, ".sql") {
+		return p.psqlRestore(ctx, record.Reader)
+	}
+	// Ignore unknown files (e.g. manifest.json).
+	return nil
 }
 
 // pgRestore restores a pg_dump custom-format dump via pg_restore.
