@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -189,7 +190,7 @@ func (p *Importer) emitRecord(ctx context.Context, records chan<- *connectors.Re
 	}
 
 	fileinfo := objects.FileInfo{
-		Lname:    recordPath,
+		Lname:    path.Base(recordPath),
 		Lsize:    0,
 		Lmode:    0444,
 		LmodTime: time.Time{},
