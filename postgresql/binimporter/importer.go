@@ -14,7 +14,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/PlakarKorp/integration-postgresql/common"
+	"github.com/PlakarKorp/integration-postgresql/manifest"
 	"github.com/PlakarKorp/kloset/connectors"
 	"github.com/PlakarKorp/kloset/connectors/importer"
 	"github.com/PlakarKorp/kloset/location"
@@ -97,11 +97,11 @@ func (p *BinImporter) pgEnv() []string {
 }
 
 func (p *BinImporter) emitManifest(ctx context.Context, records chan<- *connectors.Record) error {
-	sv, svNum, err := common.ServerVersion(ctx, p.psqlBin, p.host, p.port, "postgres", p.username, p.pgEnv())
+	sv, svNum, err := manifest.ServerVersion(ctx, p.psqlBin, p.host, p.port, "postgres", p.username, p.pgEnv())
 	if err != nil {
 		return err
 	}
-	return common.EmitManifest(ctx, records, &common.Manifest{
+	return manifest.EmitManifest(ctx, records, &manifest.Manifest{
 		Connector:        "postgresql+bin",
 		Host:             p.host,
 		Port:             p.port,

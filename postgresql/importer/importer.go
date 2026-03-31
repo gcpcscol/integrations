@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlakarKorp/integration-postgresql/common"
+	"github.com/PlakarKorp/integration-postgresql/manifest"
 	"github.com/PlakarKorp/kloset/connectors"
 	"github.com/PlakarKorp/kloset/connectors/importer"
 	"github.com/PlakarKorp/kloset/location"
@@ -131,11 +131,11 @@ func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.
 	if connectDB == "" {
 		connectDB = "postgres"
 	}
-	sv, svNum, err := common.ServerVersion(ctx, "psql", p.host, p.port, connectDB, p.username, p.pgEnv())
+	sv, svNum, err := manifest.ServerVersion(ctx, "psql", p.host, p.port, connectDB, p.username, p.pgEnv())
 	if err != nil {
 		return err
 	}
-	return common.EmitManifest(ctx, records, &common.Manifest{
+	return manifest.EmitManifest(ctx, records, &manifest.Manifest{
 		Connector:        "postgresql",
 		Host:             p.host,
 		Port:             p.port,
@@ -143,7 +143,7 @@ func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.
 		ServerVersionNum: svNum,
 		Database:         p.database,
 		DumpFormat:       dumpFormat,
-		Options: &common.ManifestOptions{
+		Options: &manifest.ManifestOptions{
 			SchemaOnly: p.schemaOnly,
 			DataOnly:   p.dataOnly,
 			Compress:   p.compress,
