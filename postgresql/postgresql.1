@@ -1,4 +1,4 @@
-.Dd March 27, 2025
+.Dd April 1, 2025
 .Dt PLAKAR-POSTGRESQL 1
 .Os
 .Sh NAME
@@ -7,33 +7,53 @@
 .Sh DESCRIPTION
 The
 .Nm
-integration package provides source and destination connectors that back up
-and restore PostgreSQL databases using the standard PostgreSQL client tools
+integration package provides two independent backup strategies for PostgreSQL.
+.Bl -tag -width "postgres+bin://"
+.It Li postgres://
+Logical backup and restore using
 .Xr pg_dump 1 ,
 .Xr pg_dumpall 1 ,
 .Xr pg_restore 1 ,
 and
 .Xr psql 1 .
-.Pp
-When configured with a specific database name the source connector uses
+Produces portable, version-independent SQL dumps.
+.It Li postgres+bin://
+Physical backup using
+.Xr pg_basebackup 1 .
+Streams a binary copy of the entire PostgreSQL data directory.
+Restore is performed by any file-restore connector.
+.El
+.Sh LOGICAL BACKUP
+.Ss How it works
+When a
+.Ar database
+is specified the source connector runs
 .Xr pg_dump 1
-to create a single-database dump in custom format
-.Pq Li -Fc .
-When no database is specified it uses
+.Fl Fc
+to produce a custom-format dump
+.Pq Li <dbname>.dump
+and
 .Xr pg_dumpall 1
-to produce a plain-SQL dump of every database on the server.
+.Fl -globals-only
+to capture roles and tablespaces
+.Pq Li globals.sql .
 .Pp
-The destination connector automatically selects the appropriate restore tool:
+When no database is specified the source connector runs
+.Xr pg_dumpall 1
+to produce a plain-SQL dump of every database on the server
+.Pq Li all.sql ,
+which already includes global objects.
+.Pp
+The destination connector dispatches on filename:
 .Xr pg_restore 1
-for custom-format
-.Pq Li .dump
-records, and
+is used for
+.Li .dump
+files;
 .Xr psql 1
-for plain-SQL
-.Pq Li .sql
-records produced by
-.Xr pg_dumpall 1 .
-.Sh PREREQUISITES
+is used for
+.Li .sql
+files.
+.Ss Prerequisites
 The following programs must be present in
 .Ev PATH
 on the machine running Plakar:
@@ -42,70 +62,280 @@ on the machine running Plakar:
 .It pg_dump
 Single-database backups.
 .It pg_dumpall
-Full-server backups.
+Full-server backups and globals-only dumps.
 .It pg_restore
 Restoring single-database dumps.
 .It psql
-Restoring full-server dumps.
+Restoring full-server dumps and connectivity checks.
 .El
-.Sh CONFIGURATION
-Connection details are supplied via a PostgreSQL URI
-.Pq the Ar location
-parameter
-and/or individual fields.
-Individual fields override the corresponding URI component.
-.Bl -tag -width "username"
+.Ss Source options
+.Bl -tag -width "schema_only"
 .It Ar location
-PostgreSQL connection URI of the form
-.Li postgresql://[user[:password]@]host[:port][/database] .
+Connection URI:
+.Li postgres://[user[:password]@]host[:port][/database] .
 .It Ar host
-Server hostname.
-Defaults to
-.Li localhost .
+Server hostname (default:
+.Li localhost ) .
+Overrides the URI host.
 .It Ar port
-Server port.
-Defaults to
-.Li 5432 .
+Server port (default:
+.Li 5432 ) .
+Overrides the URI port.
 .It Ar username
 Authentication username.
+Overrides the URI user.
 .It Ar password
-Authentication password.
-Passed to the PostgreSQL tools via the
-.Ev PGPASSWORD
-environment variable.
+Authentication password, passed via
+.Ev PGPASSWORD .
+Overrides the URI password.
 .It Ar database
-Database name.
-For the
-.Em source
-connector: if set, only this database is backed up
-.Pq pg_dump ;
-if omitted, all databases are backed up
-.Pq pg_dumpall .
-For the
-.Em destination
-connector: target database for
-.Xr pg_restore 1 ;
-if omitted the name is inferred from the dump filename.
+Database to back up.
+If omitted, all databases are backed up via
+.Xr pg_dumpall 1 .
+Overrides the URI path.
+.It Ar compress
+Enable
+.Xr pg_dump 1
+compression (default:
+.Li false ) .
+Disabled by default so that Plakar's own compression operates on
+uncompressed data.
+.It Ar schema_only
+Dump only the schema, no data (default:
+.Li false ) .
+Mutually exclusive with
+.Ar data_only .
+.It Ar data_only
+Dump only the data, no schema (default:
+.Li false ) .
+Mutually exclusive with
+.Ar schema_only .
+.It Ar pg_dump
+Path to the
+.Xr pg_dump 1
+binary (default:
+.Li pg_dump ) .
+.It Ar pg_dumpall
+Path to the
+.Xr pg_dumpall 1
+binary (default:
+.Li pg_dumpall ) .
+.It Ar psql
+Path to the
+.Xr psql 1
+binary (default:
+.Li psql ) .
+.El
+.Ss Destination options
+.Bl -tag -width "restore_globals"
+.It Ar location
+Connection URI:
+.Li postgres://[user[:password]@]host[:port][/database] .
+.It Ar host
+Server hostname (default:
+.Li localhost ) .
+Overrides the URI host.
+.It Ar port
+Server port (default:
+.Li 5432 ) .
+Overrides the URI port.
+.It Ar username
+Authentication username.
+Overrides the URI user.
+.It Ar password
+Authentication password, passed via
+.Ev PGPASSWORD .
+Overrides the URI password.
+.It Ar database
+Target database for
+.Xr pg_restore 1 .
+If omitted, the name is inferred from the dump filename.
+See
+.Ar create_db
+for how this interacts with database creation.
+.It Ar create_db
+When
+.Li false
+(default),
+.Fl d
+names the target database, which must already exist.
+When
+.Li true ,
+passes
+.Fl C
+to
+.Xr pg_restore 1
+so the database is created from the archive metadata;
+.Fl d
+then names only the initial connection database (defaults to
+.Li postgres
+if unset).
+.It Ar restore_globals
+When
+.Li true ,
+feeds
+.Li globals.sql
+to
+.Xr psql 1
+before restoring the database dump, recreating roles and tablespaces on
+the target server (default:
+.Li false ) .
+Not needed for
+.Xr pg_dumpall 1
+restores, which already contain global objects.
+.It Ar no_owner
+Pass
+.Fl -no-owner
+to
+.Xr pg_restore 1 ,
+skipping
+.Li ALTER OWNER
+statements (default:
+.Li false ) .
+.It Ar exit_on_error
+Stop on the first restore error (default:
+.Li false ) .
+Passes
+.Fl e
+to
+.Xr pg_restore 1
+and
+.Li ON_ERROR_STOP=1
+to
+.Xr psql 1 .
+.It Ar schema_only
+Restore only the schema, no data (default:
+.Li false ) .
+Mutually exclusive with
+.Ar data_only .
+Not applicable to
+.Xr pg_dumpall 1
+restores.
+.It Ar data_only
+Restore only the data, no schema (default:
+.Li false ) .
+Mutually exclusive with
+.Ar schema_only .
+Not applicable to
+.Xr pg_dumpall 1
+restores.
+.It Ar pg_restore
+Path to the
+.Xr pg_restore 1
+binary (default:
+.Li pg_restore ) .
+.It Ar psql
+Path to the
+.Xr psql 1
+binary (default:
+.Li psql ) .
+.El
+.Sh PHYSICAL BACKUP
+.Ss How it works
+The source connector runs
+.Xr pg_basebackup 1
+.Fl D Fl Li - Fl F Li tar Fl X Li fetch ,
+streaming a tar archive of the entire PostgreSQL data directory directly
+from the server's replication interface.
+Each file in the archive is stored as an individual record under
+.Li data/
+in the snapshot.
+.Pp
+No subpath may be specified in the URI:
+.Xr pg_basebackup 1
+always backs up the entire cluster.
+.Pp
+There is no dedicated destination connector.
+The snapshot contains plain files and can be restored with any
+file-restore connector.
+The restored directory is a valid PostgreSQL data directory that can be
+started directly with a PostgreSQL binary of the same major version.
+.Ss Prerequisites
+.Xr pg_basebackup 1
+must be present in
+.Ev PATH .
+The PostgreSQL server must have:
+.Bl -bullet -compact
+.It
+.Li wal_level = replica
+or higher in
+.Pa postgresql.conf .
+.It
+A user with the
+.Li REPLICATION
+privilege (or a superuser).
+.It
+.Pa pg_hba.conf
+allowing a replication connection from the backup host.
+.El
+.Ss Source options
+.Bl -tag -width "pg_basebackup"
+.It Ar location
+Connection URI:
+.Li postgres+bin://[user[:password]@]host[:port] .
+A subpath is not allowed.
+.It Ar host
+Server hostname (default:
+.Li localhost ) .
+Overrides the URI host.
+.It Ar port
+Server port (default:
+.Li 5432 ) .
+Overrides the URI port.
+.It Ar username
+Replication username.
+Overrides the URI user.
+.It Ar password
+Authentication password, passed via
+.Ev PGPASSWORD .
+Overrides the URI password.
+.It Ar pg_basebackup
+Path to the
+.Xr pg_basebackup 1
+binary (default:
+.Li pg_basebackup ) .
 .El
 .Sh EXAMPLES
-Configure a source that backs up a single database and run a backup:
+Back up a single database:
 .Bd -literal -offset indent
-$ plakar source add mypg postgresql://postgres:secret@db.example.com/myapp
+$ plakar source add mypg postgres://postgres:secret@db.example.com/myapp
 $ plakar backup @mypg
 .Ed
 .Pp
-Configure a source that backs up all databases:
+Back up all databases:
 .Bd -literal -offset indent
-$ plakar source add mypg postgresql://postgres:secret@db.example.com/
+$ plakar source add mypg postgres://postgres:secret@db.example.com
 $ plakar backup @mypg
 .Ed
 .Pp
-Configure a destination and restore a snapshot:
+Restore a single database (created automatically from archive metadata):
 .Bd -literal -offset indent
-$ plakar destination add mypgdst postgresql://postgres:secret@db.example.com/myapp
+$ plakar destination add mypgdst postgres://postgres:secret@db.example.com \e
+    create_db=true
 $ plakar restore -to @mypgdst <snapid>
 .Ed
+.Pp
+Restore all databases to a fresh server:
+.Bd -literal -offset indent
+$ plakar destination add mypgdst postgres://postgres:secret@db.example.com
+$ plakar restore -to @mypgdst <snapid>
+.Ed
+.Pp
+Physical backup of the entire cluster:
+.Bd -literal -offset indent
+$ plakar source add mypg postgres+bin://replicator:secret@db.example.com
+$ plakar backup @mypg
+.Ed
+.Pp
+Restore a physical backup to a local directory and start with Docker:
+.Bd -literal -offset indent
+$ plakar restore -to ./pgdata <snapid>
+$ docker run --rm \e
+    -v "$PWD/pgdata:/var/lib/postgresql/data" \e
+    postgres:17
+.Ed
 .Sh SEE ALSO
+.Xr pg_basebackup 1 ,
 .Xr pg_dump 1 ,
 .Xr pg_dumpall 1 ,
 .Xr pg_restore 1 ,
