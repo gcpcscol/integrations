@@ -183,19 +183,19 @@ func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error
 // -d is used only for the initial maintenance-database connection.
 // Without create_db: the target database must already exist.
 func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) error {
-	var args []string
+	args := p.conn.Args()
 	if p.createDB {
 		connectDB := p.database
 		if connectDB == "" {
 			connectDB = "postgres"
 		}
-		args = []string{"-h", p.conn.Host, "-p", p.conn.Port, "-w", "-C", "-d", connectDB}
+		args = append(args, "-C", "-d", connectDB)
 	} else {
 		targetDB := p.database
 		if targetDB == "" {
 			targetDB = strings.TrimSuffix(filepath.Base(pathname), ".dump")
 		}
-		args = []string{"-h", p.conn.Host, "-p", p.conn.Port, "-w", "-d", targetDB}
+		args = append(args, "-d", targetDB)
 	}
 	if p.exitOnError {
 		args = append(args, "-e")
@@ -207,9 +207,6 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 		args = append(args, "-s")
 	} else if p.dataOnly {
 		args = append(args, "-a")
-	}
-	if p.conn.Username != "" {
-		args = append(args, "-U", p.conn.Username)
 	}
 
 	cmd := exec.CommandContext(ctx, p.pgRestoreBin, args...)
@@ -224,12 +221,9 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 // psqlRestore feeds a pg_dumpall plain-SQL dump to psql, connecting to the
 // "postgres" maintenance database so the script can recreate other databases.
 func (p *Exporter) psqlRestore(ctx context.Context, r io.Reader) error {
-	args := []string{"-h", p.conn.Host, "-p", p.conn.Port, "-w", "-d", "postgres"}
+	args := append(p.conn.Args(), "-d", "postgres")
 	if p.exitOnError {
 		args = append(args, "-v", "ON_ERROR_STOP=1")
-	}
-	if p.conn.Username != "" {
-		args = append(args, "-U", p.conn.Username)
 	}
 
 	cmd := exec.CommandContext(ctx, p.psqlBin, args...)

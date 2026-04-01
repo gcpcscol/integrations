@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlakarKorp/integration-postgresql/pgconn"
 	"github.com/PlakarKorp/kloset/connectors"
 	"github.com/PlakarKorp/kloset/objects"
 )
@@ -37,18 +38,15 @@ type Manifest struct {
 // ServerVersion queries the PostgreSQL server for its version string and
 // numeric version. psqlBin is the path to the psql binary; connectDB is
 // the database used for the connection.
-func ServerVersion(ctx context.Context, psqlBin, host, port, connectDB, username string, env []string) (string, int, error) {
-	args := []string{
-		"-h", host, "-p", port, "-d", connectDB, "-w",
+func ServerVersion(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) (string, int, error) {
+	args := append(conn.Args(),
+		"-d", connectDB,
 		"-t", "-A", "-F", "|", "--no-psqlrc",
 		"-c", "SELECT current_setting('server_version'), current_setting('server_version_num')",
-	}
-	if username != "" {
-		args = append(args, "-U", username)
-	}
+	)
 	cmd := exec.CommandContext(ctx, psqlBin, args...)
 	cmd.Stdin = nil
-	cmd.Env = env
+	cmd.Env = conn.Env()
 	out, err := cmd.Output()
 	if err != nil {
 		return "", 0, fmt.Errorf("querying server version: %w", err)

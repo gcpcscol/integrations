@@ -88,7 +88,7 @@ func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.
 	if connectDB == "" {
 		connectDB = "postgres"
 	}
-	sv, svNum, err := manifest.ServerVersion(ctx, "psql", p.conn.Host, p.conn.Port, connectDB, p.conn.Username, p.conn.Env())
+	sv, svNum, err := manifest.ServerVersion(ctx, "psql", p.conn, connectDB)
 	if err != nil {
 		return err
 	}
@@ -129,16 +129,13 @@ func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record
 // dumpGlobals runs pg_dumpall --globals-only and emits one record named /globals.sql.
 // It captures roles and tablespaces that pg_dump does not include.
 func (p *Importer) dumpGlobals(ctx context.Context, records chan<- *connectors.Record) error {
-	args := []string{"-h", p.conn.Host, "-p", p.conn.Port, "-w", "--globals-only"}
-	if p.conn.Username != "" {
-		args = append(args, "-U", p.conn.Username)
-	}
+	args := append(p.conn.Args(), "--globals-only")
 	return p.emitRecord(ctx, records, p.pgDumpAll, args, "/globals.sql")
 }
 
 // dumpDatabase runs pg_dump -Fc and emits one record named /<dbname>.dump.
 func (p *Importer) dumpDatabase(ctx context.Context, records chan<- *connectors.Record, dbname string) error {
-	args := []string{"-h", p.conn.Host, "-p", p.conn.Port, "-w", "-Fc"}
+	args := append(p.conn.Args(), "-Fc")
 	if !p.compress {
 		args = append(args, "-Z0")
 	}
@@ -147,9 +144,6 @@ func (p *Importer) dumpDatabase(ctx context.Context, records chan<- *connectors.
 	} else if p.dataOnly {
 		args = append(args, "-a")
 	}
-	if p.conn.Username != "" {
-		args = append(args, "-U", p.conn.Username)
-	}
 	args = append(args, dbname)
 
 	return p.emitRecord(ctx, records, p.pgDump, args, "/"+dbname+".dump")
@@ -157,14 +151,11 @@ func (p *Importer) dumpDatabase(ctx context.Context, records chan<- *connectors.
 
 // dumpAll runs pg_dumpall and emits one record named /all.sql.
 func (p *Importer) dumpAll(ctx context.Context, records chan<- *connectors.Record) error {
-	args := []string{"-h", p.conn.Host, "-p", p.conn.Port, "-w"}
+	args := p.conn.Args()
 	if p.schemaOnly {
 		args = append(args, "-s")
 	} else if p.dataOnly {
 		args = append(args, "-a")
-	}
-	if p.conn.Username != "" {
-		args = append(args, "-U", p.conn.Username)
 	}
 
 	return p.emitRecord(ctx, records, p.pgDumpAll, args, "/all.sql")

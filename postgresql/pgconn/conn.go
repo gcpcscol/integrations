@@ -69,6 +69,16 @@ func ParseConnConfig(config map[string]string) (ConnConfig, string, error) {
 	return c, dbPath, nil
 }
 
+// Args returns the common connection flags shared by all PostgreSQL client
+// tools: -h host -p port -w, plus -U username when one is configured.
+func (c ConnConfig) Args() []string {
+	args := []string{"-h", c.Host, "-p", c.Port, "-w"}
+	if c.Username != "" {
+		args = append(args, "-U", c.Username)
+	}
+	return args
+}
+
 // Env returns the current process environment with PGPASSWORD injected when
 // a password is configured.
 func (c ConnConfig) Env() []string {
@@ -85,10 +95,7 @@ func (c ConnConfig) Ping(ctx context.Context, psqlBin, connectDB string) error {
 	if connectDB == "" {
 		connectDB = "postgres"
 	}
-	args := []string{"-h", c.Host, "-p", c.Port, "-d", connectDB, "-w", "-c", "SELECT 1", "-q", "--no-psqlrc"}
-	if c.Username != "" {
-		args = append(args, "-U", c.Username)
-	}
+	args := append(c.Args(), "-d", connectDB, "-c", "SELECT 1", "-q", "--no-psqlrc")
 	cmd := exec.CommandContext(ctx, psqlBin, args...)
 	cmd.Stdin = nil
 	cmd.Env = c.Env()

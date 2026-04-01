@@ -56,7 +56,7 @@ func NewBinImporter(appCtx context.Context, opts *connectors.Options, name strin
 }
 
 func (p *BinImporter) emitManifest(ctx context.Context, records chan<- *connectors.Record) error {
-	sv, svNum, err := manifest.ServerVersion(ctx, p.psqlBin, p.conn.Host, p.conn.Port, "postgres", p.conn.Username, p.conn.Env())
+	sv, svNum, err := manifest.ServerVersion(ctx, p.psqlBin, p.conn, "postgres")
 	if err != nil {
 		return err
 	}
@@ -83,13 +83,7 @@ func (p *BinImporter) Import(ctx context.Context, records chan<- *connectors.Rec
 
 	<-results // wait for the manifest ack
 
-	args := []string{
-		"-h", p.conn.Host, "-p", p.conn.Port, "-w",
-		"-D", "-", "-F", "tar", "-X", "fetch",
-	}
-	if p.conn.Username != "" {
-		args = append(args, "-U", p.conn.Username)
-	}
+	args := append(p.conn.Args(), "-D", "-", "-F", "tar", "-X", "fetch")
 
 	cmd := exec.CommandContext(ctx, p.pgBaseBackup, args...)
 	cmd.Stdin = nil
