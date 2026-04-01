@@ -145,6 +145,7 @@ func (p *BinImporter) Import(ctx context.Context, records chan<- *connectors.Rec
 	}
 }
 
+// finfo has been copied from integration-tar.
 func finfo(hdr *tar.Header) objects.FileInfo {
 	f := objects.FileInfo{
 		Lname:      path.Base(hdr.Name),
