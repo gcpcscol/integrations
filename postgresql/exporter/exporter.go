@@ -138,7 +138,7 @@ loop:
 			}
 
 			if record.IsXattr {
-				results <- record.Ok()
+				results <- record.Error(fmt.Errorf("unexpected xattr %q", record.Pathname))
 				continue
 			}
 
@@ -159,10 +159,14 @@ loop:
 }
 
 func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error {
+	// manifest.json is metadata only; nothing to restore.
+	if record.Pathname == "manifest.json" {
+		return nil
+	}
 	if strings.HasSuffix(record.Pathname, ".dump") {
 		return p.pgRestore(ctx, record.Reader, record.Pathname)
 	}
-	if record.Pathname == "/globals.sql" {
+	if record.Pathname == "globals.sql" {
 		if p.restoreGlobals {
 			return p.psqlRestore(ctx, record.Reader)
 		}
@@ -171,8 +175,7 @@ func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error
 	if strings.HasSuffix(record.Pathname, ".sql") {
 		return p.psqlRestore(ctx, record.Reader)
 	}
-	// Ignore unknown files (e.g. manifest.json).
-	return nil
+	return fmt.Errorf("unable to restore file %q", record.Pathname)
 }
 
 // pgRestore restores a pg_dump custom-format dump via pg_restore.
