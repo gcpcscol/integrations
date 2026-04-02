@@ -56,31 +56,11 @@ func NewBinImporter(appCtx context.Context, opts *connectors.Options, name strin
 }
 
 func (p *BinImporter) emitManifest(ctx context.Context, records chan<- *connectors.Record) error {
-	sv, svNum, err := manifest.ServerVersion(ctx, p.psqlBin, p.conn, "postgres")
-	if err != nil {
-		return err
-	}
-
-	m := &manifest.Manifest{
-		Connector:        "postgresql+bin",
-		Host:             p.conn.Host,
-		Port:             p.conn.Port,
-		ServerVersion:    sv,
-		ServerVersionNum: svNum,
-		DumpFormat:       "basebackup",
-	}
-
-	m.PgBaseBackupVersion = manifest.PgBaseBackupVersion(p.pgBaseBackup)
-	manifest.CollectClusterMetadata(ctx, p.psqlBin, p.conn, "postgres", m)
-
-	// Enrich each connectable non-template database with per-database detail.
-	for i := range m.Databases {
-		if m.Databases[i].AllowConn && !m.Databases[i].IsTemplate {
-			_ = manifest.QueryDatabaseDetail(ctx, p.psqlBin, p.conn, &m.Databases[i])
-		}
-	}
-
-	return manifest.EmitManifest(ctx, records, m)
+	return manifest.EmitPhysicalManifest(ctx, manifest.PhysicalConfig{
+		PSQLBin:         p.psqlBin,
+		PgBaseBackupBin: p.pgBaseBackup,
+		Conn:            p.conn,
+	}, records)
 }
 
 // Import runs pg_basebackup in tar-to-stdout mode and emits one record per

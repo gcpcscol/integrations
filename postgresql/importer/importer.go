@@ -89,53 +89,18 @@ func NewImporter(appCtx context.Context, opts *connectors.Options, name string, 
 }
 
 func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.Record, dumpFormat string) error {
-	connectDB := p.database
-	if connectDB == "" {
-		connectDB = "postgres"
-	}
-	sv, svNum, err := manifest.ServerVersion(ctx, p.psqlBin, p.conn, connectDB)
-	if err != nil {
-		return err
-	}
-
-	m := &manifest.Manifest{
-		Connector:        "postgresql",
-		Host:             p.conn.Host,
-		Port:             p.conn.Port,
-		ServerVersion:    sv,
-		ServerVersionNum: svNum,
-		Database:         p.database,
-		DumpFormat:       dumpFormat,
-		Options: &manifest.ManifestOptions{
+	return manifest.EmitLogicalManifest(ctx, manifest.LogicalConfig{
+		PSQLBin:    p.psqlBin,
+		PgDumpBin:  p.pgDump,
+		Conn:       p.conn,
+		Database:   p.database,
+		DumpFormat: dumpFormat,
+		Options: manifest.ManifestOptions{
 			SchemaOnly: p.schemaOnly,
 			DataOnly:   p.dataOnly,
 			Compress:   p.compress,
 		},
-	}
-
-	m.PgDumpVersion = manifest.PgDumpVersion(p.pgDump)
-	manifest.CollectClusterMetadata(ctx, p.psqlBin, p.conn, connectDB, m)
-
-	// Enrich each database with per-database detail (schemas, relations, …).
-	if p.database != "" {
-		// Single-database backup: only detail the target database.
-		for i := range m.Databases {
-			if m.Databases[i].Name == p.database {
-				_ = manifest.QueryDatabaseDetail(ctx, p.psqlBin, p.conn, &m.Databases[i])
-				m.Databases = []manifest.DatabaseInfo{m.Databases[i]}
-				break
-			}
-		}
-	} else {
-		// Full-cluster backup: detail every connectable non-template database.
-		for i := range m.Databases {
-			if m.Databases[i].AllowConn && !m.Databases[i].IsTemplate {
-				_ = manifest.QueryDatabaseDetail(ctx, p.psqlBin, p.conn, &m.Databases[i])
-			}
-		}
-	}
-
-	return manifest.EmitManifest(ctx, records, m)
+	}, records)
 }
 
 func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record, results <-chan *connectors.Result) error {

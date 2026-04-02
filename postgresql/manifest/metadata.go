@@ -218,33 +218,31 @@ func splitArray(s string) []string {
 	return strings.Split(s, arraySep)
 }
 
-// --- Public query functions ---
-
-// CollectClusterMetadata populates the cluster-level fields of m
+// collectClusterMetadata populates the cluster-level fields of m
 // (ClusterSystemIdentifier, InRecovery, ClusterConfig, Roles, Tablespaces,
 // and a basic Databases list) by connecting to connectDB.  Individual query
 // failures are silently ignored so that partial metadata never aborts a
 // backup.
-func CollectClusterMetadata(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string, m *Manifest) {
-	m.ClusterSystemIdentifier = QueryClusterSystemID(ctx, psqlBin, conn, connectDB)
-	m.InRecovery = QueryInRecovery(ctx, psqlBin, conn, connectDB)
-	if cfg, err := QueryClusterConfig(ctx, psqlBin, conn, connectDB); err == nil {
+func collectClusterMetadata(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string, m *Manifest) {
+	m.ClusterSystemIdentifier = queryClusterSystemID(ctx, psqlBin, conn, connectDB)
+	m.InRecovery = queryInRecovery(ctx, psqlBin, conn, connectDB)
+	if cfg, err := queryClusterConfig(ctx, psqlBin, conn, connectDB); err == nil {
 		m.ClusterConfig = &cfg
 	}
-	if roles, err := QueryRoles(ctx, psqlBin, conn, connectDB); err == nil {
+	if roles, err := queryRoles(ctx, psqlBin, conn, connectDB); err == nil {
 		m.Roles = roles
 	}
-	if tss, err := QueryTablespaces(ctx, psqlBin, conn, connectDB); err == nil {
+	if tss, err := queryTablespaces(ctx, psqlBin, conn, connectDB); err == nil {
 		m.Tablespaces = tss
 	}
-	if dbs, err := QueryDatabases(ctx, psqlBin, conn, connectDB); err == nil {
+	if dbs, err := queryDatabases(ctx, psqlBin, conn, connectDB); err == nil {
 		m.Databases = dbs
 	}
 }
 
-// PgDumpVersion returns the version string reported by pg_dump --version,
+// pgDumpVersion returns the version string reported by pg_dump --version,
 // e.g. "pg_dump (PostgreSQL) 16.2".  Returns an empty string on error.
-func PgDumpVersion(pgDumpBin string) string {
+func pgDumpVersion(pgDumpBin string) string {
 	out, err := exec.Command(pgDumpBin, "--version").Output()
 	if err != nil {
 		return ""
@@ -252,10 +250,10 @@ func PgDumpVersion(pgDumpBin string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// PgBaseBackupVersion returns the version string reported by
+// pgBaseBackupVersion returns the version string reported by
 // pg_basebackup --version, e.g. "pg_basebackup (PostgreSQL) 16.2".
 // Returns an empty string on error.
-func PgBaseBackupVersion(pgBaseBackupBin string) string {
+func pgBaseBackupVersion(pgBaseBackupBin string) string {
 	out, err := exec.Command(pgBaseBackupBin, "--version").Output()
 	if err != nil {
 		return ""
@@ -266,7 +264,7 @@ func PgBaseBackupVersion(pgBaseBackupBin string) string {
 // QueryClusterSystemID returns the PostgreSQL cluster system identifier from
 // pg_control_system().  Returns an empty string when not accessible (e.g.
 // the backup user lacks pg_monitor or superuser).
-func QueryClusterSystemID(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) string {
+func queryClusterSystemID(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) string {
 	rows, err := queryRows(ctx, psqlBin, conn, connectDB,
 		`SELECT system_identifier::text FROM pg_control_system()`)
 	if err != nil || len(rows) == 0 || len(rows[0]) == 0 {
@@ -277,7 +275,7 @@ func QueryClusterSystemID(ctx context.Context, psqlBin string, conn pgconn.ConnC
 
 // QueryInRecovery reports whether the server is currently a hot-standby
 // (i.e. the backup was taken from a replica rather than the primary).
-func QueryInRecovery(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) bool {
+func queryInRecovery(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) bool {
 	rows, err := queryRows(ctx, psqlBin, conn, connectDB,
 		`SELECT pg_is_in_recovery()`)
 	if err != nil || len(rows) == 0 || len(rows[0]) == 0 {
@@ -289,7 +287,7 @@ func QueryInRecovery(ctx context.Context, psqlBin string, conn pgconn.ConnConfig
 // QueryClusterConfig queries key server GUCs.  connectDB is any database the
 // caller already has access to; GUC data is cluster-wide regardless of the
 // connection database.
-func QueryClusterConfig(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) (ClusterConfig, error) {
+func queryClusterConfig(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) (ClusterConfig, error) {
 	rows, err := queryRows(ctx, psqlBin, conn, connectDB,
 		`SELECT name, setting FROM pg_settings `+
 			`WHERE name IN (`+
@@ -340,7 +338,7 @@ func QueryClusterConfig(ctx context.Context, psqlBin string, conn pgconn.ConnCon
 
 // QueryRoles queries all PostgreSQL roles with their attributes and group
 // memberships.
-func QueryRoles(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) ([]Role, error) {
+func queryRoles(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) ([]Role, error) {
 	rows, err := queryRows(ctx, psqlBin, conn, connectDB,
 		`SELECT rolname, rolsuper, rolreplication, rolcanlogin, rolcreatedb, `+
 			`rolcreaterole, rolinherit, rolbypassrls, rolconnlimit, `+
@@ -395,7 +393,7 @@ func QueryRoles(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, con
 
 // QueryTablespaces queries all tablespaces with their owners, locations,
 // sizes, and storage options.
-func QueryTablespaces(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) ([]Tablespace, error) {
+func queryTablespaces(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) ([]Tablespace, error) {
 	rows, err := queryRows(ctx, psqlBin, conn, connectDB,
 		`SELECT spcname, pg_get_userbyid(spcowner), `+
 			`pg_tablespace_location(oid), `+
@@ -424,7 +422,7 @@ func QueryTablespaces(ctx context.Context, psqlBin string, conn pgconn.ConnConfi
 // QueryDatabases queries the list of all databases with basic metadata.
 // Per-database detail (schemas, extensions, relations) is not fetched here;
 // call QueryDatabaseDetail for each database that needs it.
-func QueryDatabases(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) ([]DatabaseInfo, error) {
+func queryDatabases(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, connectDB string) ([]DatabaseInfo, error) {
 	rows, err := queryRows(ctx, psqlBin, conn, connectDB,
 		`SELECT d.datname, pg_get_userbyid(d.datdba), pg_encoding_to_char(d.encoding), `+
 			`d.datcollate, d.datctype, d.datallowconn, d.datistemplate, `+
@@ -460,7 +458,7 @@ func QueryDatabases(ctx context.Context, psqlBin string, conn pgconn.ConnConfig,
 
 // QueryDatabaseDetail populates db.Extensions, db.Schemas, and db.Relations
 // (including columns, constraints, and indexes) by connecting to db.Name.
-func QueryDatabaseDetail(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, db *DatabaseInfo) error {
+func queryDatabaseDetail(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, db *DatabaseInfo) error {
 	if err := queryExtensions(ctx, psqlBin, conn, db); err != nil {
 		return err
 	}
