@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"path"
 	"strconv"
@@ -121,10 +122,39 @@ func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record
 	return p.dumpAll(ctx, records)
 }
 
+// canReadPgAuthid checks whether the connected user can read pg_authid.
+// Superusers can; RDS and other restricted environments cannot.
+// The result is used to decide whether to pass --no-role-passwords to pg_dumpall.
+func (p *Importer) canReadPgAuthid(ctx context.Context) bool {
+	connectDB := p.database
+	if connectDB == "" {
+		connectDB = "postgres"
+	}
+	args := append(p.conn.Args(),
+		"-d", connectDB,
+		"-t", "-A", "--no-psqlrc",
+		"-c", "SELECT 1 FROM pg_authid LIMIT 1",
+	)
+	cmd := exec.CommandContext(ctx, p.psqlBin, args...)
+	cmd.Env = p.conn.Env()
+	return cmd.Run() == nil
+}
+
+// noRolePasswordsArgs returns --no-role-passwords appended to args when the
+// connected user cannot read pg_authid, logging a warning in that case.
+func (p *Importer) noRolePasswordsArgs(ctx context.Context, args []string) []string {
+	if !p.canReadPgAuthid(ctx) {
+		log.Printf("postgresql: cannot read pg_authid (restricted superuser, e.g. RDS); " +
+			"role passwords will be omitted from the dump — use a true superuser to include them")
+		return append(args, "--no-role-passwords")
+	}
+	return args
+}
+
 // dumpGlobals runs pg_dumpall --globals-only and emits one record named /globals.sql.
 // It captures roles and tablespaces that pg_dump does not include.
 func (p *Importer) dumpGlobals(ctx context.Context, records chan<- *connectors.Record) error {
-	args := append(p.conn.Args(), "--globals-only")
+	args := p.noRolePasswordsArgs(ctx, append(p.conn.Args(), "--globals-only"))
 	return p.emitRecord(ctx, records, p.pgDumpAll, args, "/globals.sql")
 }
 
@@ -146,7 +176,7 @@ func (p *Importer) dumpDatabase(ctx context.Context, records chan<- *connectors.
 
 // dumpAll runs pg_dumpall and emits one record named /all.sql.
 func (p *Importer) dumpAll(ctx context.Context, records chan<- *connectors.Record) error {
-	args := p.conn.Args()
+	args := p.noRolePasswordsArgs(ctx, p.conn.Args())
 	if p.schemaOnly {
 		args = append(args, "-s")
 	} else if p.dataOnly {

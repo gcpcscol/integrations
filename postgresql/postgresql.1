@@ -68,6 +68,19 @@ Restoring single-database dumps.
 .It psql
 Restoring full-server dumps and connectivity checks.
 .El
+.Pp
+The backup user should be a superuser so that
+.Xr pg_dumpall 1
+can read
+.Li pg_authid
+and include role passwords.
+On managed services such as Amazon RDS the administrative user is a
+restricted superuser that cannot read
+.Li pg_authid .
+The importer detects this automatically, retries with
+.Fl -no-role-passwords ,
+and logs a warning.
+The dump is otherwise complete, but restored roles will have no password set.
 .Ss Source options
 .Bl -tag -width "schema_only"
 .It Ar location
