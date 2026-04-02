@@ -31,6 +31,7 @@ type Manifest struct {
 	ServerVersion           string           `json:"server_version"`
 	ServerVersionNum        int              `json:"server_version_num"`
 	PgDumpVersion           string           `json:"pg_dump_version,omitempty"`
+	PgBaseBackupVersion     string           `json:"pg_basebackup_version,omitempty"`
 	ClusterSystemIdentifier string           `json:"cluster_system_identifier,omitempty"`
 	InRecovery              bool             `json:"in_recovery"`
 	Database                string           `json:"database,omitempty"`

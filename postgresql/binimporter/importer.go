@@ -70,9 +70,15 @@ func (p *BinImporter) emitManifest(ctx context.Context, records chan<- *connecto
 		DumpFormat:       "basebackup",
 	}
 
-	// No per-database relation detail: the physical backup captures every
-	// database at the file level.
+	m.PgBaseBackupVersion = manifest.PgBaseBackupVersion(p.pgBaseBackup)
 	manifest.CollectClusterMetadata(ctx, p.psqlBin, p.conn, "postgres", m)
+
+	// Enrich each connectable non-template database with per-database detail.
+	for i := range m.Databases {
+		if m.Databases[i].AllowConn && !m.Databases[i].IsTemplate {
+			_ = manifest.QueryDatabaseDetail(ctx, p.psqlBin, p.conn, &m.Databases[i])
+		}
+	}
 
 	return manifest.EmitManifest(ctx, records, m)
 }

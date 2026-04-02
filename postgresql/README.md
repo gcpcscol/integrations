@@ -266,10 +266,9 @@ timestamps, `columns` (position, name, type, nullable, default), `constraints`
 Row counts are estimates from `reltuples` (`pg_class`) and `n_live_tup`
 (`pg_stat_user_tables`), not exact values.
 
-**Note:** physical backups (`postgres+bin://`) include cluster-level metadata
-(config, roles, tablespaces, and a basic database list) but **not**
-per-database relation detail (schemas, tables, columns, indexes), since the
-physical backup already captures every database at the file level.
+Both `postgres://` and `postgres+bin://` produce the full manifest including
+per-database relation detail.  The manifest also records `pg_dump_version`
+(logical backups) or `pg_basebackup_version` (physical backups).
 
 Metadata collection is best-effort: if a query fails the affected field is
 omitted and the backup continues normally.

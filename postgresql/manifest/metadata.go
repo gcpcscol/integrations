@@ -252,6 +252,17 @@ func PgDumpVersion(pgDumpBin string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// PgBaseBackupVersion returns the version string reported by
+// pg_basebackup --version, e.g. "pg_basebackup (PostgreSQL) 16.2".
+// Returns an empty string on error.
+func PgBaseBackupVersion(pgBaseBackupBin string) string {
+	out, err := exec.Command(pgBaseBackupBin, "--version").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // QueryClusterSystemID returns the PostgreSQL cluster system identifier from
 // pg_control_system().  Returns an empty string when not accessible (e.g.
 // the backup user lacks pg_monitor or superuser).
