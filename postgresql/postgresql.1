@@ -278,6 +278,97 @@ Path to the root CA certificate used to verify the server (PEM format).
 Passed via
 .Ev PGSSLROOTCERT .
 .El
+.Sh MANIFEST
+Every logical backup snapshot contains a
+.Pa /manifest.json
+record (schema version 2) written before the dump starts.
+It captures the cluster state at the moment the backup was initiated.
+.Pp
+Top-level fields include the server version, host, port,
+.Li pg_dump_version ,
+.Li cluster_system_identifier
+.Pq unique cluster ID from pg_control_system() ,
+.Li in_recovery
+.Pq true when backup was taken from a hot standby ,
+target database, dump format, and backup options.
+.Bl -tag -width "cluster_config"
+.It Li cluster_config
+Key server GUCs:
+.Li data_directory ,
+.Li timezone ,
+.Li max_connections ,
+.Li wal_level ,
+.Li server_encoding ,
+.Li data_checksums ,
+.Li block_size ,
+.Li wal_block_size ,
+.Li shared_preload_libraries ,
+.Li lc_collate ,
+.Li lc_ctype ,
+.Li archive_mode ,
+.Li archive_command .
+.It Li roles
+All PostgreSQL roles with:
+.Li superuser ,
+.Li replication ,
+.Li can_login ,
+.Li create_db ,
+.Li create_role ,
+.Li inherit ,
+.Li bypass_rls ,
+.Li connection_limit ,
+.Li valid_until ,
+and
+.Li member_of
+.Pq list of parent roles .
+.It Li tablespaces
+All tablespaces with name, owner, filesystem location, size in bytes,
+and storage options.
+.It Li databases
+One entry per database: name, owner, encoding, collation, size,
+.Li default_tablespace ,
+.Li connection_limit ,
+installed extensions
+.Pq name, version, schema ,
+schemas
+.Pq name, owner ,
+and a
+.Li relations
+array.
+.It Li relations
+One entry per relation (ordinary table, partitioned table, foreign table,
+view, materialized view, sequence).
+Each entry carries: schema, name, owner, persistence, kind, tablespace,
+row estimates
+.Pq Li row_estimate No from Li reltuples No and Li live_row_estimate No from autovacuum ,
+size breakdown
+.Pq Li total_size_bytes No / Li table_size_bytes No / Li index_size_bytes No / Li toast_size_bytes ,
+column count, primary-key and trigger flags, row-level security flags,
+partitioning metadata
+.Pq Li is_partition No / Li partition_parent No / Li partition_strategy ,
+storage options
+.Pq reloptions ,
+last vacuum and analyze timestamps,
+.Li columns
+.Pq position, name, type, nullable, default ,
+.Li constraints
+.Pq name, type code, column names ,
+and
+.Li indexes
+.Pq name, method, definition, is_unique, is_primary, is_valid, is_partial, constraint_name, size .
+.El
+.Pp
+Row counts are estimates from
+.Li reltuples
+.Pq pg_class
+and
+.Li n_live_tup
+.Pq pg_stat_user_tables ,
+not exact values.
+Exact counts would require a full sequential scan of every table.
+.Pp
+Metadata collection is best-effort: if a query fails the affected field is
+omitted and the backup continues normally.
 .Sh PHYSICAL BACKUP
 .Ss How it works
 The source connector runs

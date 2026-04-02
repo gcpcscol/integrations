@@ -50,6 +50,94 @@ is enabled; `all.sql` is always fed to `psql`.
 - Restore time scales with data volume — large databases take longer than
   a binary restore.
 
+### Manifest
+
+Every logical backup snapshot contains a `/manifest.json` record (schema
+version 2) with metadata collected at backup time.  It is written before
+the dump starts, so it reflects the cluster state at the moment the backup
+was initiated.
+
+**Top-level fields**
+
+| Field | Description |
+|---|---|
+| `version` | Manifest schema version (currently `2`) |
+| `created_at` | Timestamp when the backup started (UTC) |
+| `connector` | Always `"postgresql"` |
+| `host` / `port` | Server coordinates |
+| `server_version` / `server_version_num` | PostgreSQL version string and numeric form |
+| `pg_dump_version` | Version string reported by `pg_dump --version` |
+| `cluster_system_identifier` | Unique cluster ID from `pg_control_system()` — correlates with physical/WAL backups |
+| `in_recovery` | `true` when the backup was taken from a hot-standby replica |
+| `database` | Target database name, or empty for a full-cluster backup |
+| `dump_format` | `"custom"` (single database) or `"sql"` (full cluster) |
+| `options` | `schema_only`, `data_only`, `compress` flags used |
+
+**`cluster_config`** — key server GUCs:
+
+| Field | Description |
+|---|---|
+| `data_directory` | PostgreSQL data directory |
+| `timezone` | Server time zone |
+| `max_connections` | Maximum client connections |
+| `wal_level` | WAL level (`minimal`, `replica`, `logical`) |
+| `server_encoding` | Server character encoding |
+| `data_checksums` | Whether page-level checksums are enabled |
+| `block_size` | Relation block size in bytes |
+| `wal_block_size` | WAL block size in bytes |
+| `shared_preload_libraries` | Libraries loaded at server start (e.g. `pg_partman`, `timescaledb`) |
+| `lc_collate` / `lc_ctype` | Cluster-level locale settings |
+| `archive_mode` | WAL archiving mode |
+| `archive_command` | WAL archive command |
+
+**`roles`** — all PostgreSQL roles with: `superuser`, `replication`,
+`can_login`, `create_db`, `create_role`, `inherit`, `bypass_rls`,
+`connection_limit`, `valid_until`, and `member_of` (list of parent roles).
+
+**`tablespaces`** — all tablespaces with name, owner, filesystem location,
+size in bytes, and storage options.
+
+**`databases`** — one entry per database with: name, owner, encoding,
+collation (`collate`, `ctype`), size in bytes, `default_tablespace`,
+`connection_limit`, installed extensions (name + version + schema), schemas
+(name + owner), and `relations`.
+
+**`relations`** — one entry per relation (ordinary table, partitioned table,
+foreign table, view, materialized view, sequence):
+
+| Field | Description |
+|---|---|
+| `schema` / `name` / `owner` | Relation identity |
+| `persistence` | `p`=permanent, `u`=unlogged, `t`=temp |
+| `kind` | `r`=table, `p`=partitioned, `f`=foreign, `v`=view, `m`=matview, `S`=sequence |
+| `tablespace` | Tablespace name (empty = default) |
+| `row_estimate` | `reltuples` estimate (instant, may be stale before first ANALYZE) |
+| `live_row_estimate` | `n_live_tup` from autovacuum stats |
+| `total_size_bytes` | Heap + indexes + TOAST |
+| `table_size_bytes` | Heap only |
+| `index_size_bytes` | Indexes only |
+| `toast_size_bytes` | TOAST table |
+| `column_count` | Number of user-visible columns |
+| `has_primary_key` / `has_triggers` | Quick flags |
+| `rls_enabled` / `rls_forced` | Row-level security state |
+| `is_partition` / `partition_parent` / `partition_strategy` | Partitioning metadata |
+| `storage_options` | `reloptions` (fill factor, autovacuum overrides, …) |
+| `last_vacuum` / `last_analyze` | Timestamps from `pg_stat_user_tables` |
+| `columns` | Per-column: position, name, type, nullable, default |
+| `constraints` | Per-constraint: name, type code, column names |
+| `indexes` | Per-index: name, method, definition, is_unique, is_primary, is_valid, is_partial, constraint_name, size |
+
+> Row counts are estimates, not exact values.  Exact counts would require a
+> full sequential scan of every table, making the manifest collection as
+> slow as a `SELECT count(*)` across the entire cluster.  Use `row_estimate`
+> or `live_row_estimate` for a quick size sanity-check; run `ANALYZE` first
+> if precision matters.
+
+Metadata collection is best-effort: if a query fails (e.g. the backup user
+lacks `pg_monitor` for `cluster_system_identifier`, or cannot connect to a
+particular database), the affected field is omitted and the backup continues
+normally.
+
 ### Prerequisites
 
 The following PostgreSQL client tools must be in `$PATH` on the machine

@@ -23,16 +23,23 @@ type ManifestOptions struct {
 }
 
 type Manifest struct {
-	Version          int              `json:"version"`
-	CreatedAt        time.Time        `json:"created_at"`
-	Connector        string           `json:"connector"`
-	Host             string           `json:"host"`
-	Port             string           `json:"port"`
-	ServerVersion    string           `json:"server_version"`
-	ServerVersionNum int              `json:"server_version_num"`
-	Database         string           `json:"database,omitempty"`
-	DumpFormat       string           `json:"dump_format"`
-	Options          *ManifestOptions `json:"options,omitempty"`
+	Version                 int              `json:"version"`
+	CreatedAt               time.Time        `json:"created_at"`
+	Connector               string           `json:"connector"`
+	Host                    string           `json:"host"`
+	Port                    string           `json:"port"`
+	ServerVersion           string           `json:"server_version"`
+	ServerVersionNum        int              `json:"server_version_num"`
+	PgDumpVersion           string           `json:"pg_dump_version,omitempty"`
+	ClusterSystemIdentifier string           `json:"cluster_system_identifier,omitempty"`
+	InRecovery              bool             `json:"in_recovery"`
+	Database                string           `json:"database,omitempty"`
+	DumpFormat              string           `json:"dump_format"`
+	Options                 *ManifestOptions `json:"options,omitempty"`
+	ClusterConfig           *ClusterConfig   `json:"cluster_config,omitempty"`
+	Roles                   []Role           `json:"roles,omitempty"`
+	Tablespaces             []Tablespace     `json:"tablespaces,omitempty"`
+	Databases               []DatabaseInfo   `json:"databases,omitempty"`
 }
 
 // ServerVersion queries the PostgreSQL server for its version string and
@@ -64,7 +71,7 @@ func ServerVersion(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, 
 
 // EmitManifest serialises m as /manifest.json and sends it on records.
 func EmitManifest(ctx context.Context, records chan<- *connectors.Record, m *Manifest) error {
-	m.Version = 1
+	m.Version = 2
 	now := time.Now().UTC()
 	m.CreatedAt = now
 

@@ -97,7 +97,8 @@ func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.
 	if err != nil {
 		return err
 	}
-	return manifest.EmitManifest(ctx, records, &manifest.Manifest{
+
+	m := &manifest.Manifest{
 		Connector:        "postgresql",
 		Host:             p.conn.Host,
 		Port:             p.conn.Port,
@@ -110,7 +111,47 @@ func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.
 			DataOnly:   p.dataOnly,
 			Compress:   p.compress,
 		},
-	})
+	}
+
+	// Collect cluster-level metadata.  Failures are non-fatal: partial
+	// metadata is better than a failed backup.
+	m.PgDumpVersion = manifest.PgDumpVersion(p.pgDump)
+	m.ClusterSystemIdentifier = manifest.QueryClusterSystemID(ctx, p.psqlBin, p.conn, connectDB)
+	m.InRecovery = manifest.QueryInRecovery(ctx, p.psqlBin, p.conn, connectDB)
+	if cfg, err := manifest.QueryClusterConfig(ctx, p.psqlBin, p.conn, connectDB); err == nil {
+		m.ClusterConfig = &cfg
+	}
+	if roles, err := manifest.QueryRoles(ctx, p.psqlBin, p.conn, connectDB); err == nil {
+		m.Roles = roles
+	}
+	if tss, err := manifest.QueryTablespaces(ctx, p.psqlBin, p.conn, connectDB); err == nil {
+		m.Tablespaces = tss
+	}
+
+	// Collect per-database metadata.
+	if dbs, err := manifest.QueryDatabases(ctx, p.psqlBin, p.conn, connectDB); err == nil {
+		if p.database != "" {
+			// Single-database backup: only include detail for the target database.
+			for i := range dbs {
+				if dbs[i].Name == p.database {
+					_ = manifest.QueryDatabaseDetail(ctx, p.psqlBin, p.conn, &dbs[i])
+					m.Databases = []manifest.DatabaseInfo{dbs[i]}
+					break
+				}
+			}
+		} else {
+			// Full-cluster backup: include detail for every connectable
+			// non-template database.
+			for i := range dbs {
+				if dbs[i].AllowConn && !dbs[i].IsTemplate {
+					_ = manifest.QueryDatabaseDetail(ctx, p.psqlBin, p.conn, &dbs[i])
+				}
+			}
+			m.Databases = dbs
+		}
+	}
+
+	return manifest.EmitManifest(ctx, records, m)
 }
 
 func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
