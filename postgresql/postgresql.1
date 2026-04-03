@@ -322,7 +322,8 @@ Key server GUCs:
 .Li lc_collate ,
 .Li lc_ctype ,
 .Li archive_mode ,
-.Li archive_command .
+.Li archive_command_set
+.Pq boolean; the command itself is not stored to avoid leaking credentials .
 .It Li roles
 All PostgreSQL roles with:
 .Li superuser ,

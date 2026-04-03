@@ -36,7 +36,7 @@ type ClusterConfig struct {
 	LCCollate              string `json:"lc_collate,omitempty"`
 	LCCType                string `json:"lc_ctype,omitempty"`
 	ArchiveMode            string `json:"archive_mode,omitempty"`
-	ArchiveCommand         string `json:"archive_command,omitempty"`
+	ArchiveCommandSet      bool   `json:"archive_command_set"` // true when archive_command is non-empty; the command itself is not stored to avoid leaking credentials
 }
 
 // Role describes a PostgreSQL role and its group memberships.
@@ -311,7 +311,7 @@ func queryClusterConfig(ctx context.Context, psqlBin string, conn pgconn.ConnCon
 		}
 		switch r[0] {
 		case "archive_command":
-			cfg.ArchiveCommand = r[1]
+			cfg.ArchiveCommandSet = r[1] != "" && r[1] != "(disabled)"
 		case "archive_mode":
 			cfg.ArchiveMode = r[1]
 		case "block_size":

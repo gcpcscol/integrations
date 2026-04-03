@@ -253,7 +253,7 @@ hot standby), target database, dump format, and backup options.
 
 | Field | Description |
 |---|---|
-| `cluster_config` | Key server GUCs: `data_directory`, `timezone`, `max_connections`, `wal_level`, `server_encoding`, `data_checksums`, `block_size`, `wal_block_size`, `shared_preload_libraries`, `lc_collate`, `lc_ctype`, `archive_mode`, `archive_command`. |
+| `cluster_config` | Key server GUCs: `data_directory`, `timezone`, `max_connections`, `wal_level`, `server_encoding`, `data_checksums`, `block_size`, `wal_block_size`, `shared_preload_libraries`, `lc_collate`, `lc_ctype`, `archive_mode`, `archive_command_set` (boolean — the command itself is not stored to avoid leaking credentials). |
 | `roles` | All PostgreSQL roles with `superuser`, `replication`, `can_login`, `create_db`, `create_role`, `inherit`, `bypass_rls`, `connection_limit`, `valid_until`, and `member_of` (list of parent roles). |
 | `tablespaces` | All tablespaces with name, owner, filesystem location, size in bytes, and storage options. |
 | `databases` | One entry per database: name, owner, encoding, collation, size, `default_tablespace`, `connection_limit`, installed extensions (name, version, schema), schemas (name, owner), and a `relations` array. |
