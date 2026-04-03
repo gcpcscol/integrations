@@ -30,6 +30,11 @@ dump — a portable, version-independent representation of the data.
   named `/all.sql` in the snapshot.  This already includes global objects
   such as roles and tablespaces.
 
+In both cases a `/manifest.json` record is also written to the snapshot
+before the dump data, containing cluster-level metadata (roles, tablespaces,
+database list, schema and relation details).  See the [Manifest](#manifest)
+section below for details.
+
 Restore dispatches on file name and extension: `.dump` files are fed to
 `pg_restore`; `globals.sql` is fed to `psql` only when `restore_globals`
 is enabled; `all.sql` is always fed to `psql`.
@@ -152,6 +157,10 @@ consistent recovery.
 
 No subpath can be specified in the URI: `pg_basebackup` always backs up
 the entire cluster.
+
+A `/manifest.json` record is also written to the snapshot before the backup
+data, containing cluster-level metadata.  See the [Manifest](#manifest)
+section below for details.
 
 ### Pros and cons
 
