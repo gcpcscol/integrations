@@ -77,7 +77,7 @@ and include role passwords.
 On managed services such as Amazon RDS the administrative user is a
 restricted superuser that cannot read
 .Li pg_authid .
-The importer detects this automatically, retries with
+The importer detects this automatically and falls back to
 .Fl -no-role-passwords ,
 and logs a warning.
 The dump is otherwise complete, but restored roles will have no password set.
