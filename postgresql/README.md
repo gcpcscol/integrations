@@ -63,7 +63,7 @@ running Plakar (typically provided by the `postgresql-client` package):
 The backup user should be a **superuser** so that `pg_dumpall` can include
 role passwords from `pg_authid`.  On managed services such as Amazon RDS the
 administrative user (e.g. `postgres`) is a *restricted* superuser that cannot
-read `pg_authid`.  In that case the importer automatically retries with
+read `pg_authid`.  In that case the importer automatically falls back to
 `--no-role-passwords` and logs a warning — the dump is otherwise complete, but
 restored roles will have no password set.
 
