@@ -496,7 +496,9 @@ func querySchemas(ctx context.Context, psqlBin string, conn pgconn.ConnConfig, d
 	rows, err := queryRows(ctx, psqlBin, conn, db.Name,
 		`SELECT nspname, pg_get_userbyid(nspowner) `+
 			`FROM pg_namespace `+
-			`WHERE nspname NOT LIKE 'pg_toast%' `+
+			`WHERE nspname NOT IN ('pg_catalog', 'information_schema') `+
+			`AND nspname NOT LIKE 'pg_toast%' `+
+			`AND nspname NOT LIKE 'pg_temp%' `+
 			`ORDER BY nspname`)
 	if err != nil {
 		return fmt.Errorf("query schemas for %s: %w", db.Name, err)
