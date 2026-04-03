@@ -50,7 +50,7 @@ type Role struct {
 	Inherit         bool       `json:"inherit"`
 	BypassRLS       bool       `json:"bypass_rls"`
 	ConnectionLimit int        `json:"connection_limit"` // -1 = no limit
-	ValidUntil      *time.Time `json:"valid_until,omitempty"`
+	ValidUntil      *time.Time `json:"valid_until"`
 	MemberOf        []string   `json:"member_of,omitempty"`
 }
 
@@ -134,8 +134,8 @@ type RelationInfo struct {
 	PartitionParent   string           `json:"partition_parent,omitempty"`   // "schema.name"
 	PartitionStrategy string           `json:"partition_strategy,omitempty"` // range, list, hash
 	StorageOptions    []string         `json:"storage_options,omitempty"`    // reloptions
-	LastVacuum        *time.Time       `json:"last_vacuum,omitempty"`
-	LastAnalyze       *time.Time       `json:"last_analyze,omitempty"`
+	LastVacuum        *time.Time       `json:"last_vacuum"`
+	LastAnalyze       *time.Time       `json:"last_analyze"`
 	Columns           []ColumnInfo     `json:"columns,omitempty"`
 	Constraints       []ConstraintInfo `json:"constraints,omitempty"`
 	Indexes           []IndexInfo      `json:"indexes,omitempty"`
