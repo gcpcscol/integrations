@@ -85,9 +85,7 @@ restored roles will have no password set.
 | `compress` | `false` | Enable `pg_dump` compression. By default dumps are stored uncompressed so that Plakar's own compression is not degraded. |
 | `schema_only` | `false` | Dump only the schema (no data). Mutually exclusive with `data_only`. |
 | `data_only` | `false` | Dump only the data (no schema). Mutually exclusive with `schema_only`. |
-| `pg_dump` | `pg_dump` | Path to the `pg_dump` binary. |
-| `pg_dumpall` | `pg_dumpall` | Path to the `pg_dumpall` binary. |
-| `psql` | `psql` | Path to the `psql` binary. Used for connectivity checks and server version queries. |
+| `pg_bin_dir` | — | Directory containing the PostgreSQL client binaries (`pg_dump`, `pg_dumpall`, `psql`). When omitted, binaries are resolved via `$PATH`. Useful when multiple PostgreSQL versions are installed. |
 | `ssl_mode` | `prefer` | SSL mode: `disable`, `allow`, `prefer`, `require`, `verify-ca`, or `verify-full`. Passed via `PGSSLMODE`. |
 | `ssl_cert` | — | Path to the client SSL certificate file (PEM). Passed via `PGSSLCERT`. |
 | `ssl_key` | — | Path to the client SSL private key file (PEM). Passed via `PGSSLKEY`. |
@@ -109,6 +107,7 @@ restored roles will have no password set.
 | `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. Not applicable to `pg_dumpall` restores. |
 | `data_only` | `false` | Restore only the data (no schema). Mutually exclusive with `schema_only`. Not applicable to `pg_dumpall` restores. |
 | `exit_on_error` | `false` | Stop on the first restore error. Applies to both `pg_restore` (`-e`) and `psql` (`ON_ERROR_STOP=1`). |
+| `pg_bin_dir` | — | Directory containing the PostgreSQL client binaries (`pg_restore`, `psql`). When omitted, binaries are resolved via `$PATH`. Useful when multiple PostgreSQL versions are installed. |
 | `ssl_mode` | `prefer` | SSL mode: `disable`, `allow`, `prefer`, `require`, `verify-ca`, or `verify-full`. Passed via `PGSSLMODE`. |
 | `ssl_cert` | — | Path to the client SSL certificate file (PEM). Passed via `PGSSLCERT`. |
 | `ssl_key` | — | Path to the client SSL private key file (PEM). Passed via `PGSSLKEY`. |
@@ -201,7 +200,7 @@ The PostgreSQL server must have:
 | `port` | `5432` | Server port. Overrides the URI port. |
 | `username` | — | PostgreSQL replication username. Overrides the URI user. |
 | `password` | — | PostgreSQL password. Overrides the URI password. |
-| `pg_basebackup` | `pg_basebackup` | Path to the `pg_basebackup` binary. |
+| `pg_bin_dir` | — | Directory containing the PostgreSQL client binaries (`pg_basebackup`, `psql`). When omitted, binaries are resolved via `$PATH`. Useful when multiple PostgreSQL versions are installed. |
 | `ssl_mode` | `prefer` | SSL mode: `disable`, `allow`, `prefer`, `require`, `verify-ca`, or `verify-full`. Passed via `PGSSLMODE`. |
 | `ssl_cert` | — | Path to the client SSL certificate file (PEM). Passed via `PGSSLCERT`. |
 | `ssl_key` | — | Path to the client SSL private key file (PEM). Passed via `PGSSLKEY`. |

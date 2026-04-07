@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/PlakarKorp/integration-postgresql/manifest"
@@ -25,9 +26,17 @@ func init() {
 }
 
 type BinImporter struct {
-	conn         pgconn.ConnConfig
-	pgBaseBackup string
-	psqlBin      string
+	conn      pgconn.ConnConfig
+	pgBinDir  string // directory containing pg_basebackup, psql; empty means use $PATH
+}
+
+// bin returns the full path to a PostgreSQL binary.
+// When pgBinDir is empty the name is returned as-is so the OS resolves it via $PATH.
+func (p *BinImporter) bin(name string) string {
+	if p.pgBinDir == "" {
+		return name
+	}
+	return filepath.Join(p.pgBinDir, name)
 }
 
 func NewBinImporter(appCtx context.Context, opts *connectors.Options, name string, config map[string]string) (importer.Importer, error) {
@@ -39,17 +48,10 @@ func NewBinImporter(appCtx context.Context, opts *connectors.Options, name strin
 		return nil, fmt.Errorf("postgres+bin: subpath %q is not allowed (pg_basebackup backs up the entire cluster)", dbPath)
 	}
 
-	imp := &BinImporter{
-		conn:         conn,
-		pgBaseBackup: "pg_basebackup",
-		psqlBin:      "psql",
-	}
+	imp := &BinImporter{conn: conn}
 
-	if v, ok := config["pg_basebackup"]; ok && v != "" {
-		imp.pgBaseBackup = v
-	}
-	if v, ok := config["psql"]; ok && v != "" {
-		imp.psqlBin = v
+	if v, ok := config["pg_bin_dir"]; ok && v != "" {
+		imp.pgBinDir = v
 	}
 
 	return imp, nil
@@ -57,8 +59,8 @@ func NewBinImporter(appCtx context.Context, opts *connectors.Options, name strin
 
 func (p *BinImporter) emitManifest(ctx context.Context, records chan<- *connectors.Record) error {
 	return manifest.EmitPhysicalManifest(ctx, manifest.PhysicalConfig{
-		PSQLBin:         p.psqlBin,
-		PgBaseBackupBin: p.pgBaseBackup,
+		PSQLBin:         p.bin("psql"),
+		PgBaseBackupBin: p.bin("pg_basebackup"),
 		Conn:            p.conn,
 	}, records)
 }
@@ -78,7 +80,7 @@ func (p *BinImporter) Import(ctx context.Context, records chan<- *connectors.Rec
 
 	args := append(p.conn.Args(), "-D", "-", "-F", "tar", "-X", "fetch")
 
-	cmd := exec.CommandContext(ctx, p.pgBaseBackup, args...)
+	cmd := exec.CommandContext(ctx, p.bin("pg_basebackup"), args...)
 	cmd.Stdin = nil
 	cmd.Env = p.conn.Env()
 
@@ -167,7 +169,7 @@ func finfo(hdr *tar.Header) objects.FileInfo {
 
 // Ping verifies that the PostgreSQL server is reachable.
 func (p *BinImporter) Ping(ctx context.Context) error {
-	return p.conn.Ping(ctx, p.psqlBin, "")
+	return p.conn.Ping(ctx, p.bin("psql"), "")
 }
 
 func (p *BinImporter) Close(ctx context.Context) error { return nil }

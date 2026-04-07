@@ -30,15 +30,10 @@
       "minLength": 1,
       "description": "PostgreSQL password. Overrides the password in the location URI."
     },
-    "pg_basebackup": {
+    "pg_bin_dir": {
       "type": "string",
       "minLength": 1,
-      "description": "Path to the pg_basebackup binary (default: pg_basebackup, resolved via $PATH)."
-    },
-    "psql": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Path to the psql binary (default: psql, resolved via $PATH)."
+      "description": "Directory containing the PostgreSQL client binaries (pg_basebackup, psql). When omitted, binaries are resolved via $PATH."
     },
     "ssl_mode": {
       "type": "string",

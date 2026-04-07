@@ -15,6 +15,7 @@ import (
 	"github.com/PlakarKorp/kloset/location"
 )
 
+
 func init() {
 	exporter.Register("postgresql", 0, NewExporter)
 }
@@ -28,8 +29,16 @@ type Exporter struct {
 	schemaOnly     bool   // pass -s to pg_restore
 	dataOnly       bool   // pass -a to pg_restore
 	restoreGlobals bool   // feed globals.sql to psql before restoring the database
-	pgRestoreBin   string
-	psqlBin        string
+	pgBinDir       string // directory containing pg_restore, psql; empty means use $PATH
+}
+
+// bin returns the full path to a PostgreSQL binary.
+// When pgBinDir is empty the name is returned as-is so the OS resolves it via $PATH.
+func (p *Exporter) bin(name string) string {
+	if p.pgBinDir == "" {
+		return name
+	}
+	return filepath.Join(p.pgBinDir, name)
 }
 
 func NewExporter(ctx context.Context, opts *connectors.Options, name string, config map[string]string) (exporter.Exporter, error) {
@@ -39,10 +48,8 @@ func NewExporter(ctx context.Context, opts *connectors.Options, name string, con
 	}
 
 	exp := &Exporter{
-		conn:         conn,
-		database:     dbPath,
-		pgRestoreBin: "pg_restore",
-		psqlBin:      "psql",
+		conn:     conn,
+		database: dbPath,
 	}
 
 	if db, ok := config["database"]; ok && db != "" {
@@ -93,11 +100,8 @@ func NewExporter(ctx context.Context, opts *connectors.Options, name string, con
 	if exp.schemaOnly && exp.dataOnly {
 		return nil, fmt.Errorf("schema_only and data_only are mutually exclusive")
 	}
-	if v, ok := config["pg_restore"]; ok && v != "" {
-		exp.pgRestoreBin = v
-	}
-	if v, ok := config["psql"]; ok && v != "" {
-		exp.psqlBin = v
+	if v, ok := config["pg_bin_dir"]; ok && v != "" {
+		exp.pgBinDir = v
 	}
 	return exp, nil
 }
@@ -108,7 +112,7 @@ func (p *Exporter) Type() string          { return "postgresql" }
 func (p *Exporter) Flags() location.Flags { return 0 }
 
 func (p *Exporter) Ping(ctx context.Context) error {
-	return p.conn.Ping(ctx, p.psqlBin, p.database)
+	return p.conn.Ping(ctx, p.bin("psql"), p.database)
 }
 
 func (p *Exporter) Close(ctx context.Context) error {
@@ -209,7 +213,7 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 		args = append(args, "-a")
 	}
 
-	cmd := exec.CommandContext(ctx, p.pgRestoreBin, args...)
+	cmd := exec.CommandContext(ctx, p.bin("pg_restore"), args...)
 	cmd.Stdin = r
 	cmd.Env = p.conn.Env()
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -226,7 +230,7 @@ func (p *Exporter) psqlRestore(ctx context.Context, r io.Reader) error {
 		args = append(args, "-v", "ON_ERROR_STOP=1")
 	}
 
-	cmd := exec.CommandContext(ctx, p.psqlBin, args...)
+	cmd := exec.CommandContext(ctx, p.bin("psql"), args...)
 	cmd.Stdin = r
 	cmd.Env = p.conn.Env()
 	if out, err := cmd.CombinedOutput(); err != nil {

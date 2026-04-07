@@ -59,15 +59,10 @@
       "type": "boolean",
       "description": "When true, passes -a to pg_restore to restore only data (no schema). Mutually exclusive with schema_only. Not applicable to pg_dumpall restores."
     },
-    "pg_restore": {
+    "pg_bin_dir": {
       "type": "string",
       "minLength": 1,
-      "description": "Path to the pg_restore binary (default: pg_restore, resolved via $PATH)."
-    },
-    "psql": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Path to the psql binary (default: psql, resolved via $PATH)."
+      "description": "Directory containing the PostgreSQL client binaries (pg_restore, psql). When omitted, binaries are resolved via $PATH."
     },
     "ssl_mode": {
       "type": "string",

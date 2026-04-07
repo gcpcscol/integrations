@@ -8,6 +8,7 @@ import (
 	"log"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -30,9 +31,16 @@ type Importer struct {
 	compress   bool   // enable pg_dump compression; off by default to avoid degrading Plakar's compression
 	schemaOnly bool   // pass -s: dump schema only
 	dataOnly   bool   // pass -a: dump data only
-	pgDump     string
-	pgDumpAll  string
-	psqlBin    string
+	pgBinDir   string // directory containing pg_dump, pg_dumpall, psql; empty means use $PATH
+}
+
+// bin returns the full path to a PostgreSQL binary.
+// When pgBinDir is empty the name is returned as-is so the OS resolves it via $PATH.
+func (p *Importer) bin(name string) string {
+	if p.pgBinDir == "" {
+		return name
+	}
+	return filepath.Join(p.pgBinDir, name)
 }
 
 func NewImporter(appCtx context.Context, opts *connectors.Options, name string, config map[string]string) (importer.Importer, error) {
@@ -42,24 +50,15 @@ func NewImporter(appCtx context.Context, opts *connectors.Options, name string, 
 	}
 
 	imp := &Importer{
-		conn:      conn,
-		database:  dbPath,
-		pgDump:    "pg_dump",
-		pgDumpAll: "pg_dumpall",
-		psqlBin:   "psql",
+		conn:     conn,
+		database: dbPath,
 	}
 
 	if db, ok := config["database"]; ok && db != "" {
 		imp.database = db
 	}
-	if v, ok := config["pg_dump"]; ok && v != "" {
-		imp.pgDump = v
-	}
-	if v, ok := config["pg_dumpall"]; ok && v != "" {
-		imp.pgDumpAll = v
-	}
-	if v, ok := config["psql"]; ok && v != "" {
-		imp.psqlBin = v
+	if v, ok := config["pg_bin_dir"]; ok && v != "" {
+		imp.pgBinDir = v
 	}
 	if v, ok := config["compress"]; ok && v != "" {
 		b, err := strconv.ParseBool(v)
@@ -91,8 +90,8 @@ func NewImporter(appCtx context.Context, opts *connectors.Options, name string, 
 
 func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.Record, dumpFormat string) error {
 	return manifest.EmitLogicalManifest(ctx, manifest.LogicalConfig{
-		PSQLBin:    p.psqlBin,
-		PgDumpBin:  p.pgDump,
+		PSQLBin:    p.bin("psql"),
+		PgDumpBin:  p.bin("pg_dump"),
 		Conn:       p.conn,
 		Database:   p.database,
 		DumpFormat: dumpFormat,
@@ -139,7 +138,7 @@ func (p *Importer) canReadPgAuthid(ctx context.Context) bool {
 		"-t", "-A", "--no-psqlrc",
 		"-c", "SELECT 1 FROM pg_authid LIMIT 1",
 	)
-	cmd := exec.CommandContext(ctx, p.psqlBin, args...)
+	cmd := exec.CommandContext(ctx, p.bin("psql"), args...)
 	cmd.Stdin = nil
 	cmd.Env = p.conn.Env()
 	out, err := cmd.CombinedOutput()
@@ -165,7 +164,7 @@ func (p *Importer) noRolePasswordsArgs(ctx context.Context, args []string) []str
 // It captures roles and tablespaces that pg_dump does not include.
 func (p *Importer) dumpGlobals(ctx context.Context, records chan<- *connectors.Record) error {
 	args := p.noRolePasswordsArgs(ctx, append(p.conn.Args(), "--globals-only"))
-	return p.emitRecord(ctx, records, p.pgDumpAll, args, "/globals.sql")
+	return p.emitRecord(ctx, records, p.bin("pg_dumpall"), args, "/globals.sql")
 }
 
 // dumpDatabase runs pg_dump -Fc and emits one record named /<dbname>.dump.
@@ -181,7 +180,7 @@ func (p *Importer) dumpDatabase(ctx context.Context, records chan<- *connectors.
 	}
 	args = append(args, dbname)
 
-	return p.emitRecord(ctx, records, p.pgDump, args, "/"+dbname+".dump")
+	return p.emitRecord(ctx, records, p.bin("pg_dump"), args, "/"+dbname+".dump")
 }
 
 // dumpAll runs pg_dumpall and emits one record named /all.sql.
@@ -193,7 +192,7 @@ func (p *Importer) dumpAll(ctx context.Context, records chan<- *connectors.Recor
 		args = append(args, "-a")
 	}
 
-	return p.emitRecord(ctx, records, p.pgDumpAll, args, "/all.sql")
+	return p.emitRecord(ctx, records, p.bin("pg_dumpall"), args, "/all.sql")
 }
 
 // emitRecord starts bin with args and sends a streaming Record on records.
@@ -260,7 +259,7 @@ func (r *cmdReader) Close() error {
 }
 
 func (p *Importer) Ping(ctx context.Context) error {
-	return p.conn.Ping(ctx, p.psqlBin, p.database)
+	return p.conn.Ping(ctx, p.bin("psql"), p.database)
 }
 
 func (p *Importer) Close(ctx context.Context) error { return nil }

@@ -123,21 +123,12 @@ Dump only the data, no schema (default:
 .Li false ) .
 Mutually exclusive with
 .Ar schema_only .
-.It Ar pg_dump
-Path to the
-.Xr pg_dump 1
-binary (default:
-.Li pg_dump ) .
-.It Ar pg_dumpall
-Path to the
-.Xr pg_dumpall 1
-binary (default:
-.Li pg_dumpall ) .
-.It Ar psql
-Path to the
-.Xr psql 1
-binary (default:
-.Li psql ) .
+.It Ar pg_bin_dir
+Directory containing the PostgreSQL client binaries
+.Pq pg_dump , pg_dumpall , psql .
+When omitted, binaries are resolved via
+.Ev PATH .
+Useful when multiple PostgreSQL versions are installed.
 .It Ar ssl_mode
 SSL mode for the connection (default:
 .Li prefer ) .
@@ -256,16 +247,12 @@ Mutually exclusive with
 Not applicable to
 .Xr pg_dumpall 1
 restores.
-.It Ar pg_restore
-Path to the
-.Xr pg_restore 1
-binary (default:
-.Li pg_restore ) .
-.It Ar psql
-Path to the
-.Xr psql 1
-binary (default:
-.Li psql ) .
+.It Ar pg_bin_dir
+Directory containing the PostgreSQL client binaries
+.Pq pg_restore , psql .
+When omitted, binaries are resolved via
+.Ev PATH .
+Useful when multiple PostgreSQL versions are installed.
 .It Ar ssl_mode
 SSL mode for the connection (default:
 .Li prefer ) .
@@ -454,11 +441,12 @@ Overrides the URI user.
 Authentication password, passed via
 .Ev PGPASSWORD .
 Overrides the URI password.
-.It Ar pg_basebackup
-Path to the
-.Xr pg_basebackup 1
-binary (default:
-.Li pg_basebackup ) .
+.It Ar pg_bin_dir
+Directory containing the PostgreSQL client binaries
+.Pq pg_basebackup , psql .
+When omitted, binaries are resolved via
+.Ev PATH .
+Useful when multiple PostgreSQL versions are installed.
 .It Ar ssl_mode
 SSL mode for the connection (default:
 .Li prefer ) .
