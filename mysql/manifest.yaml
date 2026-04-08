@@ -1,14 +1,23 @@
-tier: official
+name: mysql
+display_name: MySQL
+description: Integration providing import and export capabilities for MySQL databases.
+api_version: v1.1.0
+homepage: https://github.com/PlakarKorp/integration-mysql
 license: ISC
-description: "import and export capabilities for MySQL databases"
-github: github.com/PlakarKorp/integration-mysql
-contact: help@plakar.io
-
+tier: official
+contact: mailto:help@plakar.io
 connectors:
-  - name: mysqlImporter
-    protocol: mysql
-    type: database
-
-  - name: mysqlExporter
-    protocol: mysql
-    type: database
+  - type: importer
+    executable: mysqlImporter
+    homepage: https://github.com/PlakarKorp/integration-mysql
+    license: ISC
+    protocols: [mysql]
+    validator: ./importer/schema.json
+    class: database
+  - type: exporter
+    executable: mysqlExporter
+    homepage: https://github.com/PlakarKorp/integration-mysql
+    license: ISC
+    protocols: [mysql]
+    validator: ./exporter/schema.json
+    class: database
