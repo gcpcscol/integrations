@@ -115,12 +115,20 @@ plakar pkg add "./${PTAR}"`
 
 // StartPostgresContainer starts a postgres:17 container attached to networkName
 // with a default database named "testdb" (password "secret").
+//
+// The server is configured with wal_level=replica and a pg_hba.conf rule that
+// allows replication connections from any host, so both logical and physical
+// (pg_basebackup) backups work against the same container.
+//
 // The container is automatically terminated when the test ends.
 func StartPostgresContainer(ctx context.Context, t *testing.T, networkName string) testcontainers.Container {
 	t.Helper()
 
 	req := testcontainers.ContainerRequest{
 		Image: "postgres:17",
+		// Pass wal_level=replica as a server flag so it takes effect before
+		// the first checkpoint — ALTER SYSTEM would require a restart.
+		Cmd: []string{"postgres", "-c", "wal_level=replica"},
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": "secret",
 			"POSTGRES_DB":       "testdb",
@@ -137,5 +145,11 @@ func StartPostgresContainer(ctx context.Context, t *testing.T, networkName strin
 		t.Fatalf("start postgres container: %v", err)
 	}
 	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Allow replication connections from any address inside the Docker network.
+	// pg_hba.conf changes take effect immediately after a reload (no restart needed).
+	ExecOK(ctx, t, container, "bash", "-c",
+		`echo "host replication all all trust" >> "$PGDATA/pg_hba.conf" && pg_ctl reload -D "$PGDATA"`)
+
 	return container
 }
