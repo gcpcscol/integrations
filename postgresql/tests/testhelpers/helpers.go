@@ -148,8 +148,10 @@ func StartPostgresContainer(ctx context.Context, t *testing.T, networkName strin
 
 	// Allow replication connections from any address inside the Docker network.
 	// pg_hba.conf changes take effect immediately after a reload (no restart needed).
+	// Use pg_reload_conf() instead of pg_ctl so this works when exec'd as root.
 	ExecOK(ctx, t, container, "bash", "-c",
-		`echo "host replication all all trust" >> "$PGDATA/pg_hba.conf" && pg_ctl reload -D "$PGDATA"`)
+		`echo "host replication all all trust" >> "$PGDATA/pg_hba.conf" && psql -U postgres -c "SELECT pg_reload_conf()"`)
+
 
 	return container
 }
