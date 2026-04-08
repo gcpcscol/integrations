@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
 )
 
@@ -44,11 +45,11 @@ func StartPlakarContainer(ctx context.Context, t *testing.T, net *testcontainers
 			KeepImage:     true,
 			PrintBuildLog: false,
 		},
-		Cmd: []string{"sleep", "infinity"},
-		Mounts: testcontainers.ContainerMounts{
-			testcontainers.BindMount(root, "/src"),
-		},
+		Cmd:      []string{"sleep", "infinity"},
 		Networks: networks,
+		HostConfigModifier: func(hc *dockercontainer.HostConfig) {
+			hc.Binds = append(hc.Binds, root+":/src")
+		},
 	}
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
