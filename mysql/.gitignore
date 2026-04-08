@@ -2,3 +2,4 @@ mysqlImporter
 mysqlExporter
 dist/
 *.ptar
+*.local.json
