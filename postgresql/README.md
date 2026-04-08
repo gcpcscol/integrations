@@ -317,6 +317,16 @@ it.  The individual steps are also available as separate targets:
 | `make uninstall` | Remove the installed `postgresql` package |
 | `make reinstall` | `uninstall` + `install` in one step |
 
+### Integration tests
+
+The test suite uses [testcontainers-go](https://golang.testcontainers.org) to spin up real Docker containers — no mocks.  Requires Docker to be running.
+
+```bash
+make integration-test
+```
+
+---
+
 ### Testing restores with a local database
 
 `make testdb` starts a throw-away PostgreSQL container on port 9999 and
