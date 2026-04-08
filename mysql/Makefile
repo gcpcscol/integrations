@@ -21,18 +21,17 @@ package: build
 	cp $(MYSQLIMPORTER) $(MYSQLEXPORTER) /tmp/mysqlpkg/
 	cp manifest.yaml /tmp/mysqlpkg/
 	cd /tmp/mysqlpkg && \
-		PTAR="mysql_$(VERSION)_$(OS)_$(ARCH).ptar" && \
-		$(PLAKAR) pkg create ./manifest.yaml $(VERSION) && \
-		$(PLAKAR) pkg add "./$${PTAR}"
+		$(PLAKAR) pkg create ./manifest.yaml $(VERSION)
+	cp /tmp/mysqlpkg/mysql_$(VERSION)_$(OS)_$(ARCH).ptar .
 	rm -rf /tmp/mysqlpkg
 
 .PHONY: install
 install: package
-	$(PLAKAR) pkg install mysql
+	$(PLAKAR) pkg add ./mysql_$(VERSION)_$(OS)_$(ARCH).ptar
 
 .PHONY: uninstall
 uninstall:
-	$(PLAKAR) pkg uninstall mysql
+	$(PLAKAR) pkg rm mysql
 
 .PHONY: reinstall
 reinstall: uninstall install
