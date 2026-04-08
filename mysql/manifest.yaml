@@ -1,0 +1,14 @@
+tier: official
+license: ISC
+description: "import and export capabilities for MySQL databases"
+github: github.com/PlakarKorp/integration-mysql
+contact: help@plakar.io
+
+connectors:
+  - name: mysqlImporter
+    protocol: mysql
+    type: database
+
+  - name: mysqlExporter
+    protocol: mysql
+    type: database
