@@ -317,6 +317,39 @@ it.  The individual steps are also available as separate targets:
 | `make uninstall` | Remove the installed `postgresql` package |
 | `make reinstall` | `uninstall` + `install` in one step |
 
+### Integration tests
+
+The test suite lives under `tests/` and uses [testcontainers-go](https://golang.testcontainers.org) to spin up real Docker containers — no mocks.
+
+```bash
+make integration-test
+```
+
+Requires Docker to be running.  Each test package is independent and gets its own cache entry, so changing one test file does not invalidate the cached results of the others.
+
+#### What is tested
+
+| Package | Test | What it covers |
+|---|---|---|
+| `tests/logical` | `TestLogicalBackup` | `pg_dump` single-database backup |
+| `tests/logical` | `TestDumpallBackup` | `pg_dumpall` full-server backup and restore, with row-count verification |
+| `tests/physical` | `TestPhysicalBackup` | `pg_basebackup` physical backup |
+
+#### How it works
+
+Each test follows the same pattern:
+
+1. Create an isolated Docker network.
+2. Start a `postgres:17` container on that network (alias `postgres`), seeded with test data where relevant.  The server is started with `wal_level=replica` and a `pg_hba.conf` rule allowing replication, so the same container works for both logical and physical backups.
+3. Start a plakar container built from `tests/plakar.Dockerfile`.  The Dockerfile copies the repository source, builds the three plugin binaries, and installs the resulting `.ptar` package — all at image build time.  Docker's layer cache means this is only paid when the source changes.
+4. Initialise a plakar store (`plakar at /var/backups create -plaintext`) and run the backup.
+5. Inspect the snapshot with `plakar ls` and `plakar cat`.
+6. For the dumpall test: restore to a second `postgres-restore` container and assert the expected row count.
+
+The `tests/testhelpers` package provides shared helpers (`NewNetwork`, `StartPostgresContainer`, `StartPlakarContainer`, `ListSnapshots`, …) imported by all test packages.
+
+---
+
 ### Testing restores with a local database
 
 `make testdb` starts a throw-away PostgreSQL container on port 9999 and
