@@ -44,9 +44,9 @@ testdb:
 		-e MYSQL_DATABASE=testdb \
 		mysql:8
 
-.PHONY: integration-test
-integration-test:
-	go test -v -timeout 20m ./tests/...
+.PHONY: test
+test:
+	go test -v ./tests/...
 
 .PHONY: clean
 clean:
