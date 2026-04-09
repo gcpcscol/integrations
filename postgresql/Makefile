@@ -37,7 +37,7 @@ testdb:
 	@echo ""
 	docker run --rm -ti --name test -p 9999:5432 -e POSTGRES_PASSWORD=postgres postgres
 
-integration-test:
+test:
 	${GO} test -v ./tests/...
 
 clean:
