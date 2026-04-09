@@ -1,4 +1,4 @@
-name: Integration tests
+name: tests
 
 on:
   push:
@@ -15,5 +15,5 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run integration tests
-        run: make integration-test
+      - name: Run tests
+        run: make test
