@@ -1,56 +1,43 @@
-OS   ?= $(shell go env GOOS)
-ARCH ?= $(shell go env GOARCH)
-
-MYSQLIMPORTER = mysqlImporter
-MYSQLEXPORTER = mysqlExporter
+GO      = go
+EXT     =
 
 PLAKAR  ?= plakar
 VERSION ?= v1.0.0
 
-build: $(MYSQLIMPORTER) $(MYSQLEXPORTER)
+GOOS   := $(shell go env GOOS)
+GOARCH := $(shell go env GOARCH)
+PTAR   := mysql_$(VERSION)_$(GOOS)_$(GOARCH).ptar
 
-$(MYSQLIMPORTER):
-	go build -o $@ ./plugin/importer
+all: build
 
-$(MYSQLEXPORTER):
-	go build -o $@ ./plugin/exporter
+build:
+	${GO} build -v -o mysqlImporter${EXT} ./plugin/importer
+	${GO} build -v -o mysqlExporter${EXT} ./plugin/exporter
 
-.PHONY: package
 package: build
-	mkdir -p /tmp/mysqlpkg
-	cp $(MYSQLIMPORTER) $(MYSQLEXPORTER) /tmp/mysqlpkg/
-	cp manifest.yaml /tmp/mysqlpkg/
-	cd /tmp/mysqlpkg && \
-		$(PLAKAR) pkg create ./manifest.yaml $(VERSION)
-	cp /tmp/mysqlpkg/mysql_$(VERSION)_$(OS)_$(ARCH).ptar .
-	rm -rf /tmp/mysqlpkg
+	rm -f $(PTAR)
+	$(PLAKAR) pkg create ./manifest.yaml $(VERSION)
 
-.PHONY: install
-install: package
-	$(PLAKAR) pkg add ./mysql_$(VERSION)_$(OS)_$(ARCH).ptar
-
-.PHONY: uninstall
 uninstall:
-	$(PLAKAR) pkg rm mysql
+	-$(PLAKAR) pkg rm mysql
 
-.PHONY: reinstall
+install: package
+	$(PLAKAR) pkg add ./$(PTAR)
+
 reinstall: uninstall install
 
-.PHONY: testdb
+# Start a throw-away MySQL instance for restore testing.
+# The restore hint is printed first since docker run blocks.
 testdb:
-	docker run --rm -it \
-		-p 3306:3306 \
-		-e MYSQL_ROOT_PASSWORD=secret \
-		-e MYSQL_DATABASE=testdb \
-		mysql:8
+	@echo "To restore a snapshot to this database:"
+	@echo "  $(PLAKAR) destination rm mydb"
+	@echo "  $(PLAKAR) destination add mydb mysql://root@127.0.0.1:3306 password=secret"
+	@echo "  $(PLAKAR) restore -to @mydb <snapid>"
+	@echo ""
+	docker run --rm -ti --name test -p 3306:3306 -e MYSQL_ROOT_PASSWORD=secret -e MYSQL_DATABASE=testdb mysql:8
 
-.PHONY: test
 test:
-	go test -v ./tests/...
+	${GO} test -v ./tests/...
 
-.PHONY: clean
 clean:
-	rm -f $(MYSQLIMPORTER) $(MYSQLEXPORTER)
-
-.PHONY: all
-all: build
+	rm -f mysqlImporter mysqlExporter
