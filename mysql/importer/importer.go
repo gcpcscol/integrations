@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -22,8 +23,8 @@ import (
 type Importer struct {
 	conn              mysqlconn.ConnConfig
 	database          string // empty = --all-databases
-	noData        bool
-	noCreateInfo          bool
+	noData            bool
+	noCreateInfo      bool
 	singleTransaction bool
 	routines          bool
 	events            bool
@@ -116,8 +117,8 @@ func (i *Importer) Import(ctx context.Context, records chan<- *connectors.Record
 		Conn:     i.conn,
 		Database: i.database,
 		Options: manifest.ManifestOptions{
-			NoData:        i.noData,
-			NoCreateInfo:          i.noCreateInfo,
+			NoData:            i.noData,
+			NoCreateInfo:      i.noCreateInfo,
 			SingleTransaction: i.singleTransaction,
 			Routines:          i.routines,
 			Events:            i.events,
@@ -190,9 +191,9 @@ func (i *Importer) dumpFlags() []string {
 
 // cmdReader wraps a command's stdout and captures its exit status on Close.
 type cmdReader struct {
-	io.ReadCloser        // stdout pipe
-	cmd    *exec.Cmd
-	stderr *bytes.Buffer
+	io.ReadCloser // stdout pipe
+	cmd           *exec.Cmd
+	stderr        *bytes.Buffer
 }
 
 func (r *cmdReader) Close() error {
@@ -234,7 +235,7 @@ func (i *Importer) startDump(ctx context.Context, args []string) (io.ReadCloser,
 func (i *Importer) emitDump(ctx context.Context, records chan<- *connectors.Record, pathname string, readerFunc func() (io.ReadCloser, error)) error {
 	now := time.Now().UTC()
 	fileinfo := objects.FileInfo{
-		Lname:    strings.TrimPrefix(pathname, "/"),
+		Lname:    path.Base(pathname),
 		Lsize:    0, // unknown until streamed
 		Lmode:    0444,
 		LmodTime: now,
