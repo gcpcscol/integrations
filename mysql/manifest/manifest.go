@@ -119,13 +119,10 @@ func Emit(ctx context.Context, cfg Config, records chan<- *connectors.Record) er
 	dbs, err := collectDatabases(ctx, db, cfg.Database)
 	if err == nil {
 		// Enrich each database with table/routine/trigger/event detail.
+		// All detail queries target information_schema with a WHERE clause,
+		// so the existing connection is sufficient — no per-database reconnect needed.
 		for i := range dbs {
-			dbConn, connErr := openDB(cfg.Conn, dbs[i].Name)
-			if connErr != nil {
-				continue
-			}
-			collectDatabaseDetail(ctx, dbConn, &dbs[i])
-			dbConn.Close()
+			collectDatabaseDetail(ctx, db, &dbs[i])
 		}
 		m.Databases = dbs
 	}

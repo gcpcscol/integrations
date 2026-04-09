@@ -165,12 +165,6 @@ func nullableInt64(ni sql.NullInt64) int64 {
 	return 0
 }
 
-// mysqldumpVersion returns the version string reported by mysqldump --version.
-// Returns an empty string on error.
-func mysqldumpVersion(binPath string) string {
-	// This is called from manifest.go with the full binary path
-	return "" // populated by manifest.go using exec
-}
 
 // collectServerConfig queries key server variables from INFORMATION_SCHEMA / SHOW VARIABLES.
 func collectServerConfig(ctx context.Context, db *sql.DB) (ServerConfig, error) {
