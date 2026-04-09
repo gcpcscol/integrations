@@ -71,15 +71,18 @@ func (e *Exporter) Close(_ context.Context) error { return nil }
 
 // Export processes incoming backup records and restores them to MySQL.
 func (e *Exporter) Export(ctx context.Context, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
-	for record := range records {
-		result := e.restore(ctx, record)
+	defer close(results)
+	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case results <- result:
+		case record, ok := <-records:
+			if !ok {
+				return nil
+			}
+			results <- e.restore(ctx, record)
 		}
 	}
-	return nil
 }
 
 func (e *Exporter) restore(ctx context.Context, record *connectors.Record) *connectors.Result {
