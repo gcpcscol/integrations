@@ -57,7 +57,16 @@ func New(ctx context.Context, opts *connectors.Options, proto string, config map
 		return b, nil
 	}
 
-	imp := &Importer{conn: conn, database: mysqlconn.DatabaseFromConfig(config), setGTIDPurged: config["set_gtid_purged"]}
+	gtid := config["set_gtid_purged"]
+	if gtid != "" {
+		switch strings.ToUpper(gtid) {
+		case "AUTO", "ON", "OFF":
+			gtid = strings.ToUpper(gtid)
+		default:
+			return nil, fmt.Errorf("invalid set_gtid_purged %q: must be AUTO, ON, or OFF", gtid)
+		}
+	}
+	imp := &Importer{conn: conn, database: mysqlconn.DatabaseFromConfig(config), setGTIDPurged: gtid}
 	if imp.singleTransaction, err = boolOpt("single_transaction", true); err != nil {
 		return nil, err
 	}

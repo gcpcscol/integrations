@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -47,6 +48,10 @@ func ParseConnConfig(config map[string]string) (ConnConfig, error) {
 		cc.Host = v
 	}
 	if v := config["port"]; v != "" {
+		p, err := strconv.Atoi(v)
+		if err != nil || p < 1 || p > 65535 {
+			return cc, fmt.Errorf("invalid port %q: must be an integer between 1 and 65535", v)
+		}
 		cc.Port = v
 	}
 	if v := config["username"]; v != "" {
@@ -56,6 +61,13 @@ func ParseConnConfig(config map[string]string) (ConnConfig, error) {
 		cc.Password = v
 	}
 	if v := config["ssl_mode"]; v != "" {
+		valid := map[string]bool{
+			"disabled": true, "preferred": true, "required": true,
+			"verify_ca": true, "verify_identity": true,
+		}
+		if !valid[strings.ToLower(v)] {
+			return cc, fmt.Errorf("invalid ssl_mode %q: must be one of disabled, preferred, required, verify_ca, verify_identity", v)
+		}
 		cc.SSLMode = v
 	}
 	if v := config["ssl_cert"]; v != "" {
