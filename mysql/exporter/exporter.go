@@ -34,12 +34,11 @@ func New(ctx context.Context, opts *connectors.Options, proto string, config map
 		conn:     conn,
 		database: mysqlconn.DatabaseFromConfig(config),
 	}
-	var err2 error
-	if exp.createDB, err2 = strconv.ParseBool(config["create_db"]); err2 != nil && config["create_db"] != "" {
-		return nil, fmt.Errorf("invalid value for create_db: %w", err2)
+	if exp.createDB, err = strconv.ParseBool(config["create_db"]); err != nil && config["create_db"] != "" {
+		return nil, fmt.Errorf("invalid value for create_db: %w", err)
 	}
-	if exp.force, err2 = strconv.ParseBool(config["force"]); err2 != nil && config["force"] != "" {
-		return nil, fmt.Errorf("invalid value for force: %w", err2)
+	if exp.force, err = strconv.ParseBool(config["force"]); err != nil && config["force"] != "" {
+		return nil, fmt.Errorf("invalid value for force: %w", err)
 	}
 	return exp, nil
 }
