@@ -16,7 +16,7 @@ type DBVariant struct {
 	Name       string
 	Image      string            // Docker image for the database server
 	Env        map[string]string // environment variables for the container
-	ReadyLog   string            // log line to wait for before considering ready
+	WaitFor    wait.Strategy     // strategy to determine when the server is ready
 	Protocol   string            // Plakar protocol: "mysql" or "mysql+mariadb"
 	CLI        string            // client CLI for seeding: "mysql" or "mariadb"
 	Dockerfile string            // path to the plakar test image Dockerfile (from repo root)
@@ -32,7 +32,8 @@ var DBVariants = []DBVariant{
 			"MYSQL_ROOT_PASSWORD": "secret",
 			"MYSQL_DATABASE":      "testdb",
 		},
-		ReadyLog:   "port: 3306  MySQL Community Server",
+		// MySQL logs this line exactly once when the real server is ready.
+		WaitFor:    wait.ForLog("port: 3306  MySQL Community Server"),
 		Protocol:   "mysql",
 		CLI:        "mysql",
 		Dockerfile: "tests/plakar-mysql.Dockerfile",
@@ -45,7 +46,9 @@ var DBVariants = []DBVariant{
 			"MARIADB_ROOT_PASSWORD": "secret",
 			"MARIADB_DATABASE":      "testdb",
 		},
-		ReadyLog:   "ready for connections",
+		// MariaDB logs "ready for connections" twice: once during the temporary
+		// init server and once when the real server starts. Wait for the second.
+		WaitFor:    wait.ForLog("ready for connections").WithOccurrence(2),
 		Protocol:   "mysql+mariadb",
 		CLI:        "mariadb",
 		Dockerfile: "tests/plakar-mariadb.Dockerfile",
@@ -65,7 +68,7 @@ func StartDBContainer(ctx context.Context, t *testing.T, net *testcontainers.Doc
 		ExposedPorts:   []string{"3306/tcp"},
 		Networks:       []string{net.Name},
 		NetworkAliases: map[string][]string{net.Name: {alias}},
-		WaitingFor:     wait.ForLog(v.ReadyLog),
+		WaitingFor:     v.WaitFor,
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
