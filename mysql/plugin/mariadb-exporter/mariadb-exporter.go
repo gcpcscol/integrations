@@ -18,6 +18,7 @@ func newMariaDB(_ context.Context, _ *connectors.Options, proto string, config m
 	}
 	conn.ClientBin = "mariadb"
 	conn.DumpBin = "mariadb-dump"
+	conn.ExpectedFlavor = "mariadb"
 	return exporter.New(proto, conn, config, "mariadb")
 }
 

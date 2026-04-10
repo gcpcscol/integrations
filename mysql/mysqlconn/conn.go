@@ -33,6 +33,9 @@ type ConnConfig struct {
 	// DumpBin is the dump binary name (e.g. "mysqldump" or "mariadb-dump").
 	// When empty, defaults to "mysqldump".
 	DumpBin string
+	// ExpectedFlavor is the server type this connector is configured for
+	// ("mysql" or "mariadb"). When set, Ping rejects a server of the wrong type.
+	ExpectedFlavor string
 }
 
 func (cc ConnConfig) clientBin() string {
@@ -301,6 +304,7 @@ func (cc ConnConfig) CheckFlavor(ctx context.Context, expectedFlavor string) err
 }
 
 // Ping verifies connectivity by running SELECT 1 against the server.
+// If ExpectedFlavor is set it also checks that the server is the right type.
 func (cc ConnConfig) Ping(ctx context.Context) error {
 	pwArg, cleanup, err := cc.PasswordFileArg()
 	if err != nil {
@@ -313,6 +317,9 @@ func (cc ConnConfig) Ping(ctx context.Context) error {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ping failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if cc.ExpectedFlavor != "" {
+		return cc.CheckFlavor(ctx, cc.ExpectedFlavor)
 	}
 	return nil
 }

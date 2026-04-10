@@ -23,6 +23,7 @@ func newMariaDB(_ context.Context, _ *connectors.Options, proto string, config m
 	}
 	conn.ClientBin = "mariadb"
 	conn.DumpBin = "mariadb-dump"
+	conn.ExpectedFlavor = "mariadb"
 
 	base, err := importer.New(proto, conn, config)
 	if err != nil {

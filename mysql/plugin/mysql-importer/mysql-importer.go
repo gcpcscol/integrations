@@ -28,6 +28,7 @@ func newMySQL(_ context.Context, _ *connectors.Options, proto string, config map
 	}
 	conn.ClientBin = "mysql"
 	conn.DumpBin = "mysqldump"
+	conn.ExpectedFlavor = "mysql"
 
 	base, err := importer.New(proto, conn, config)
 	if err != nil {
