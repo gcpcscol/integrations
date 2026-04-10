@@ -18,20 +18,24 @@ import (
 
 // Exporter restores MySQL or MariaDB dumps using the mysql / mariadb CLI.
 type Exporter struct {
-	proto    string // registered protocol, e.g. "mysql" or "mysql+mariadb"
-	conn     mysqlconn.ConnConfig
-	database string // target database; inferred from filename if empty
-	createDB bool
-	force    bool
+	proto          string // registered protocol, e.g. "mysql" or "mysql+mariadb"
+	conn           mysqlconn.ConnConfig
+	database       string // target database; inferred from filename if empty
+	createDB       bool
+	force          bool
+	expectedFlavor string // "mysql" or "mariadb"
 }
 
 // New constructs an Exporter with a pre-configured connection.
+// flavor must be "mysql" or "mariadb" and is checked against the live server
+// at the start of Export to catch protocol mismatches early.
 // The caller is responsible for setting conn.ClientBin before calling.
-func New(proto string, conn mysqlconn.ConnConfig, config map[string]string) (*Exporter, error) {
+func New(proto string, conn mysqlconn.ConnConfig, config map[string]string, flavor string) (*Exporter, error) {
 	exp := &Exporter{
-		proto:    proto,
-		conn:     conn,
-		database: mysqlconn.DatabaseFromConfig(config),
+		proto:          proto,
+		conn:           conn,
+		database:       mysqlconn.DatabaseFromConfig(config),
+		expectedFlavor: flavor,
 	}
 	var err error
 	if exp.createDB, err = strconv.ParseBool(config["create_db"]); err != nil && config["create_db"] != "" {
@@ -71,6 +75,9 @@ func (e *Exporter) Close(_ context.Context) error { return nil }
 // Export processes incoming backup records and restores them to the database.
 func (e *Exporter) Export(ctx context.Context, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
 	defer close(results)
+	if err := e.conn.CheckFlavor(ctx, e.expectedFlavor); err != nil {
+		return err
+	}
 	for {
 		select {
 		case <-ctx.Done():

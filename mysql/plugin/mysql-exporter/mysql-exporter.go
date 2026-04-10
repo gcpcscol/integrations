@@ -18,7 +18,7 @@ func newMySQL(_ context.Context, _ *connectors.Options, proto string, config map
 	}
 	conn.ClientBin = "mysql"
 	conn.DumpBin = "mysqldump"
-	return exporter.New(proto, conn, config)
+	return exporter.New(proto, conn, config, "mysql")
 }
 
 func main() {

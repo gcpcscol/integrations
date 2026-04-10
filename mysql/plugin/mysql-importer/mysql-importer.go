@@ -58,6 +58,9 @@ func newMySQL(_ context.Context, _ *connectors.Options, proto string, config map
 }
 
 func (m *mysqlImporter) Import(ctx context.Context, records chan<- *connectors.Record, _ <-chan *connectors.Result) error {
+	if err := m.Conn.CheckFlavor(ctx, "mysql"); err != nil {
+		return err
+	}
 	cs := m.columnStatistics
 	opts := m.CommonManifestOptions()
 	opts.ColumnStatistics = &cs

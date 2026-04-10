@@ -246,6 +246,33 @@ func sslModeToTLS(mode string) string {
 	}
 }
 
+// CheckFlavor verifies that the connected server matches the expected flavor
+// ("mysql" or "mariadb"). MariaDB always includes "-MariaDB" in its VERSION()
+// string; MySQL never does. Returns a clear, actionable error on mismatch so
+// the user knows which protocol to use instead of getting a cryptic dump error.
+func (cc ConnConfig) CheckFlavor(ctx context.Context, expectedFlavor string) error {
+	args := append(cc.Args(), "--batch", "--silent", "--skip-column-names", "-e", "SELECT VERSION()")
+	cmd := exec.CommandContext(ctx, cc.BinPath(cc.clientBin()), args...)
+	cmd.Env = cc.Env()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("querying server version: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	version := strings.TrimSpace(string(out))
+	isMariaDB := strings.Contains(version, "MariaDB")
+	switch expectedFlavor {
+	case "mariadb":
+		if !isMariaDB {
+			return fmt.Errorf("server version %q is MySQL, not MariaDB: use mysql:// instead of mysql+mariadb://", version)
+		}
+	default: // "mysql"
+		if isMariaDB {
+			return fmt.Errorf("server version %q is MariaDB, not MySQL: use mysql+mariadb:// instead of mysql://", version)
+		}
+	}
+	return nil
+}
+
 // Ping verifies connectivity by running SELECT 1 against the server.
 func (cc ConnConfig) Ping(ctx context.Context) error {
 	args := append(cc.Args(), "--connect-timeout=10", "--batch", "--silent", "-e", "SELECT 1")

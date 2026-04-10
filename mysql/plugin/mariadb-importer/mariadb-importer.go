@@ -33,6 +33,9 @@ func newMariaDB(_ context.Context, _ *connectors.Options, proto string, config m
 }
 
 func (m *mariadbImporter) Import(ctx context.Context, records chan<- *connectors.Record, _ <-chan *connectors.Result) error {
+	if err := m.Conn.CheckFlavor(ctx, "mariadb"); err != nil {
+		return err
+	}
 	cfg := manifest.Config{
 		Conn:     m.Conn,
 		Flavor:   "mariadb",

@@ -18,7 +18,7 @@ func newMariaDB(_ context.Context, _ *connectors.Options, proto string, config m
 	}
 	conn.ClientBin = "mariadb"
 	conn.DumpBin = "mariadb-dump"
-	return exporter.New(proto, conn, config)
+	return exporter.New(proto, conn, config, "mariadb")
 }
 
 func main() {
