@@ -13,7 +13,6 @@ import (
 	"github.com/PlakarKorp/integration-mysql/importer"
 	"github.com/PlakarKorp/integration-mysql/mysqlconn"
 	"github.com/PlakarKorp/kloset/connectors"
-	iexporter "github.com/PlakarKorp/kloset/connectors/exporter"
 	"github.com/PlakarKorp/kloset/location"
 )
 
@@ -26,34 +25,15 @@ type Exporter struct {
 	force    bool
 }
 
-// NewMySQL constructs an Exporter for MySQL.
-func NewMySQL(ctx context.Context, opts *connectors.Options, proto string, config map[string]string) (iexporter.Exporter, error) {
-	return newExporter("mysql", proto, config)
-}
-
-// NewMariaDB constructs an Exporter for MariaDB.
-func NewMariaDB(ctx context.Context, opts *connectors.Options, proto string, config map[string]string) (iexporter.Exporter, error) {
-	return newExporter("mariadb", proto, config)
-}
-
-func newExporter(flavor, proto string, config map[string]string) (iexporter.Exporter, error) {
-	conn, err := mysqlconn.ParseConnConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	if flavor == "mariadb" {
-		conn.ClientBin = "mariadb"
-		conn.DumpBin = "mariadb-dump"
-	} else {
-		conn.ClientBin = "mysql"
-		conn.DumpBin = "mysqldump"
-	}
-
+// New constructs an Exporter with a pre-configured connection.
+// The caller is responsible for setting conn.ClientBin before calling.
+func New(proto string, conn mysqlconn.ConnConfig, config map[string]string) (*Exporter, error) {
 	exp := &Exporter{
 		proto:    proto,
 		conn:     conn,
 		database: mysqlconn.DatabaseFromConfig(config),
 	}
+	var err error
 	if exp.createDB, err = strconv.ParseBool(config["create_db"]); err != nil && config["create_db"] != "" {
 		return nil, fmt.Errorf("invalid value for create_db: %w", err)
 	}
