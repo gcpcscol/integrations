@@ -302,10 +302,7 @@ users, do one of:
 
 ### Large databases
 
-For very large databases, consider:
-- Running the backup from a read replica to avoid impacting the primary.
-- Ensuring enough disk/memory for the mysqldump process.
-- Plakar's own deduplication and compression handle repeated content efficiently.
+For very large databases, consider running the backup from a read replica to avoid impacting the primary.
 
 ## SSL/TLS Configuration
 
@@ -338,22 +335,12 @@ make testdb
 Requires Docker.
 
 ```sh
-make integration-test
+make test
 ```
 
 ## Known Limitations (v1)
 
-- **Physical backup not supported**: Only logical dumps via `mysqldump`.  For
-  physical backups, consider Percona XtraBackup or MySQL Shell's dump utility
-  (potential future plugin).
+- **Physical backup not supported**: Only logical dumps via `mysqldump`.
 - **No per-table filtering**: The entire database (or all databases) is dumped.
-- **No restore-time no_data / no_create_info**: Filtering during restore is not
-  yet supported; the full dump is always piped to `mysql`.
-- **User/grant migration**: Single-database backups do not capture users or
-  grants (see [User and grant migration](#user-and-grant-migration)).
-
-## See Also
-
-- `mysql.1` — man page
-- [Plakar documentation](https://plakar.io/docs)
-- [mysqldump reference](https://dev.mysql.com/doc/refman/8.0/en/mysqldump.html)
+- **No restore-time no_data / no_create_info**: Filtering during restore is not yet supported; the full dump is always piped to `mysql`.
+- **User/grant migration**: Single-database backups do not capture users or grants (see [User and grant migration](#user-and-grant-migration)).
