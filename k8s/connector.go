@@ -44,7 +44,7 @@ func init() {
 	importer.Register("k8s+pvc", 0, NewImporter)
 
 	exporter.Register("k8s", 0, NewExporter)
-	exporter.Register("k8s+csi", 0, NewExporter)
+	exporter.Register("k8s+pvc", 0, NewExporter)
 }
 
 func NewImporter(ctx context.Context, opts *connectors.Options, name string, params map[string]string) (importer.Importer, error) {
@@ -82,12 +82,12 @@ func New(ctx context.Context, opts *connectors.Options, proto string, params map
 	var namespace, pvcName, snapClass string
 
 	switch proto {
-	case "k8s+pvc":
+	case "k8s+csi":
 		if export {
-			return nil, fmt.Errorf("k8s+pvc is only supported for importer")
+			return nil, fmt.Errorf("k8s+csi is for importers only; use k8s+pvc for restore")
 		}
 		fallthrough
-	case "k8s+csi":
+	case "k8s+pvc":
 		var found bool
 
 		namespace, pvcName, found = strings.Cut(strings.Trim(u.Path, "/"), "/")
@@ -196,7 +196,7 @@ func (k *k8s) Export(ctx context.Context, records <-chan *connectors.Record, res
 	case "k8s":
 		defer close(results)
 		return k.apply(ctx, records, results)
-	case "k8s+csi":
+	case "k8s+pvc":
 		// no need to close results here, it's passed to
 		// exporter.Export which will take care of it.
 		return k.restorePvc(ctx, k.namespace, k.pvcName, records, results)
