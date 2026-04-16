@@ -86,19 +86,19 @@ func New(ctx context.Context, opts *connectors.Options, proto string, params map
 		if export {
 			return nil, fmt.Errorf("k8s+csi is for importers only; use k8s+pvc for restore")
 		}
+
+		snapClass = params["volume_snapshot_class"]
+		if snapClass == "" && !export {
+			return nil, fmt.Errorf("missing volume_snapshot_class option")
+		}
+
 		fallthrough
 	case "k8s+pvc":
 		var found bool
-
 		namespace, pvcName, found = strings.Cut(strings.Trim(u.Path, "/"), "/")
 		if !found || strings.Contains(pvcName, "/") {
 			return nil, fmt.Errorf("bad location: expected namespace/pvc-name but got %s",
 				strings.Trim(u.Path, "/"))
-		}
-
-		snapClass = params["volume_snapshot_class"]
-		if proto == "k8s+csi" && snapClass == "" && !export {
-			return nil, fmt.Errorf("missing volume_snapshot_class option")
 		}
 
 	case "k8s":
