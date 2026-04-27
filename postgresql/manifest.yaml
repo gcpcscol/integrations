@@ -14,6 +14,7 @@ connectors:
     protocols: [postgres]
     validator: ./importer/schema.json
     class: database
+    subclass: postgresql
   - type: importer
     executable: postgresqlBinImporter
     homepage: https://github.com/PlakarKorp/integration-postgresql
@@ -21,6 +22,7 @@ connectors:
     protocols: [postgres+bin]
     validator: ./binimporter/schema.json
     class: database
+    subclass: postgresql
   - type: exporter
     executable: postgresqlExporter
     homepage: https://github.com/PlakarKorp/integration-postgresql
@@ -28,3 +30,4 @@ connectors:
     protocols: [postgres]
     validator: ./exporter/schema.json
     class: database
+    subclass: postgresql
