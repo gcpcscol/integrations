@@ -132,13 +132,19 @@ type DatabaseInfo struct {
 	Events    []EventInfo   `json:"events,omitempty"`
 }
 
-// --- Helpers ---
-
 func openDB(conn mysqlconn.ConnConfig, database string) (*sql.DB, error) {
-	db, err := sql.Open("mysql", conn.DSN(database))
+	connStr := conn.DSN(database)
+	driver := "mysql"
+	if conn.SqlCloud {
+		connStr = conn.DSNForCloudSQL(database)
+		driver = "cloudsql-mysql"
+	}
+
+	db, err := sql.Open(driver, connStr)
 	if err != nil {
 		return nil, fmt.Errorf("opening connection to %s: %w", conn.Host, err)
 	}
+
 	db.SetMaxOpenConns(1)
 	return db, nil
 }
