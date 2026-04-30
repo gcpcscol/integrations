@@ -133,14 +133,16 @@ type DatabaseInfo struct {
 func openDB(conn mysqlconn.ConnConfig, database string) (*sql.DB, error) {
 	connStr := conn.DSN(database)
 	driver := "mysql"
+	targetHost := conn.Host
 	if conn.SqlCloud {
 		connStr = conn.DSNForCloudSQL(database)
 		driver = "cloudsql-mysql"
+		targetHost = conn.TrueHost
 	}
 
 	db, err := sql.Open(driver, connStr)
 	if err != nil {
-		return nil, fmt.Errorf("opening connection to %s: %w", conn.Host, err)
+		return nil, fmt.Errorf("opening connection to %s: %w", targetHost, err)
 	}
 
 	db.SetMaxOpenConns(1)
