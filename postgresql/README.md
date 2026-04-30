@@ -7,6 +7,7 @@ This integration provides two independent backup strategies for PostgreSQL:
 | Protocol | Tool | Granularity | Restore requires |
 |---|---|---|---|
 | `postgres://` | `pg_dump` / `pg_dumpall` | logical (SQL) | a running PostgreSQL server |
+| `postgres+aws://` | `pg_dump` / `pg_dumpall` + AWS IAM token | logical (SQL) | a running PostgreSQL server |
 | `postgres+bin://` | `pg_basebackup` | physical (binary) | any file-restore connector |
 
 ---
@@ -136,6 +137,77 @@ plakar restore -to @mypgdst <snapid>
 plakar destination add mypgdst postgres://postgres:secret@db.example.com/myapp \
     no_owner=true
 plakar restore -to @mypgdst <snapid>
+```
+
+---
+
+## Logical backup with AWS IAM authentication — `postgres+aws://`
+
+### How it works
+
+`postgres+aws://` performs the same logical backup as `postgres://` but
+authenticates using a short-lived IAM token instead of a static password.
+Before running `pg_dump` / `pg_dumpall`, the importer calls:
+
+```
+aws rds generate-db-auth-token \
+    --hostname HOST --port PORT --username USER --region REGION
+```
+
+The resulting token is used as the PostgreSQL password.  No `password`
+parameter is needed (or accepted) in the configuration.
+
+The backup output is identical to `postgres://` and can be restored with the
+same `postgres://` exporter.
+
+### Prerequisites
+
+- The **AWS CLI** (`aws`) must be installed and in `$PATH` on the machine
+  running Plakar, or its path must be given via `aws_cli_path`.
+- The CLI must be configured with credentials that have the
+  `rds-db:connect` IAM permission for the target database and user.
+- The RDS instance must have **IAM database authentication** enabled.
+- The PostgreSQL user must be created with `GRANT rds_iam TO <user>`.
+- An SSL connection is required by AWS for IAM-authenticated connections —
+  set `ssl_mode` to `require` or higher.
+
+### Importer options (`postgres+aws://`)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `location` | — | Connection URI: `postgres+aws://[user@]host[:port][/database]`. No password component — the IAM token is fetched automatically. |
+| `host` | `localhost` | RDS instance hostname. Overrides the URI host. |
+| `port` | `5432` | RDS instance port. Overrides the URI port. |
+| `username` | — | PostgreSQL username (required). Must be an IAM-enabled database user. Overrides the URI user. |
+| `region` | — | AWS region of the RDS instance (required), e.g. `us-east-1`. |
+| `aws_cli_path` | `aws` | Path to the AWS CLI executable. Useful when `aws` is not in `$PATH` or when a specific version is required. |
+| `database` | — | Database to back up. If omitted, all databases are backed up via `pg_dumpall`. Overrides the URI path. |
+| `compress` | `false` | Enable `pg_dump` compression. By default dumps are stored uncompressed so that Plakar's own compression is not degraded. |
+| `schema_only` | `false` | Dump only the schema (no data). Mutually exclusive with `data_only`. |
+| `data_only` | `false` | Dump only the data (no schema). Mutually exclusive with `schema_only`. |
+| `pg_bin_dir` | — | Directory containing the PostgreSQL client binaries. When omitted, binaries are resolved via `$PATH`. |
+| `ssl_mode` | `prefer` | SSL mode. IAM authentication requires an encrypted connection — use `require` or higher. |
+| `ssl_cert` | — | Path to the client SSL certificate file (PEM). Passed via `PGSSLCERT`. |
+| `ssl_key` | — | Path to the client SSL private key file (PEM). Passed via `PGSSLKEY`. |
+| `ssl_root_cert` | — | Path to the root CA certificate used to verify the server (PEM). Passed via `PGSSLROOTCERT`. |
+
+### Examples
+
+```bash
+# Back up a single RDS database using IAM authentication
+plakar source add myrds postgres+aws://myuser@mydb.cluster-xyz.us-east-1.rds.amazonaws.com/myapp \
+    region=us-east-1 ssl_mode=require
+plakar backup @myrds
+
+# Back up all databases on an RDS instance
+plakar source add myrds postgres+aws://myuser@mydb.cluster-xyz.us-east-1.rds.amazonaws.com/ \
+    region=us-east-1 ssl_mode=require
+plakar backup @myrds
+
+# Use a custom AWS CLI path (e.g. installed via pip into a virtualenv)
+plakar source add myrds postgres+aws://myuser@mydb.cluster-xyz.us-east-1.rds.amazonaws.com/myapp \
+    region=us-east-1 ssl_mode=require aws_cli_path=/opt/venv/bin/aws
+plakar backup @myrds
 ```
 
 ---
