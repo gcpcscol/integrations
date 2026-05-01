@@ -79,7 +79,7 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 			return nil, fmt.Errorf("watch failed")
 		}
 
-		if evt.Type != watch.Modified {
+		if evt.Type != watch.Modified && evt.Type != watch.Added {
 			continue
 		}
 
@@ -214,7 +214,7 @@ func (k *k8s) fsServer(ctx context.Context, op, ns string, pvc *corev1.Persisten
 				return nil, fmt.Errorf("watch failed")
 			}
 
-			if evt.Type != watch.Modified {
+			if evt.Type != watch.Modified && evt.Type != watch.Added {
 				continue
 			}
 
