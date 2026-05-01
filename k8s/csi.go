@@ -67,7 +67,7 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 		select {
 		case evt, ok = <-w.ResultChan():
 			if !ok {
-				return snap, err
+				return snap, nil
 			}
 		case <-ctx.Done():
 			k.delsnap(ctx, snap)
