@@ -27,10 +27,6 @@ import (
 	"k8s.io/client-go/transport/spdy"
 )
 
-func isready(snap *vs.VolumeSnapshot) bool {
-	return snap.Status != nil && snap.Status.ReadyToUse != nil && *snap.Status.ReadyToUse
-}
-
 func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot, error) {
 	snap := &vs.VolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
@@ -97,7 +93,7 @@ func (k *k8s) gensnap(ctx context.Context, ns, name string) (*vs.VolumeSnapshot,
 			return nil, fmt.Errorf("%s", *s.Status.Error.Message)
 		}
 
-		if isready(s) {
+		if s.Status != nil && s.Status.ReadyToUse != nil && *s.Status.ReadyToUse {
 			snap = s
 			break
 		}
