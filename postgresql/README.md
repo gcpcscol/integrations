@@ -108,6 +108,7 @@ restored roles will have no password set.
 | `username` | — | PostgreSQL username. Overrides the URI user. |
 | `password` | — | PostgreSQL password. Overrides the URI password. |
 | `database` | — | Target database for `pg_restore`. If omitted, the name is inferred from the dump filename (e.g. `00001-myapp.dump` → `myapp`). Not used with `recreate` (the target database name is taken from the archive in that case). |
+| `databases` | — | Comma-separated list of database names to restore from a full backup. Only `.dump` files matching one of these names are restored; others are skipped. Globals are always restored unless `no_globals=true`. Example: `myapp,myother`. |
 | `clean` | `false` | Pass `--clean --if-exists` to `pg_restore`: drop objects within the target database before recreating them. The database itself must already exist. Mutually exclusive with `recreate`. |
 | `recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. Safe to use on both empty and populated clusters. The `postgres` database is never dropped — it is restored with `--clean --if-exists` instead, mirroring `pg_dumpall` behaviour. Mutually exclusive with `clean`. |
 | `no_globals` | `false` | When `true`, skips feeding `00000-globals.sql` to `psql`. By default globals are restored automatically when present, recreating roles and tablespaces on the target server before any database dump is applied. Set to `true` when the target server already has the required roles and tablespaces and you want to skip the globals step. |
@@ -144,6 +145,11 @@ plakar restore -to @mypgdst <snapid>
 # Restore, dropping and recreating the database entirely (safe for fresh or existing clusters)
 plakar destination add mypgdst postgres://postgres:secret@db.example.com/ \
     recreate=true
+plakar restore -to @mypgdst <snapid>
+
+# Restore a single database from a full backup
+plakar destination add mypgdst postgres://postgres:secret@db.example.com/ \
+    databases=myapp recreate=true
 plakar restore -to @mypgdst <snapid>
 
 # Restore, skipping owner assignment (e.g. roles differ on target)
@@ -326,6 +332,7 @@ the password for the restore connection.
 | `username` | — | PostgreSQL username (required). Must be an IAM-enabled database user. Overrides the URI user. |
 | `region` | — | AWS region of the RDS instance (required), e.g. `us-east-1`. |
 | `database` | — | Target database for `pg_restore`. If omitted, the name is inferred from the dump filename. Not used with `recreate`. |
+| `databases` | — | Comma-separated list of database names to restore from a full backup. Only `.dump` files matching one of these names are restored; others are skipped. Globals are always restored unless `no_globals=true`. Example: `myapp,myother`. |
 | `clean` | `false` | Pass `--clean --if-exists` to `pg_restore`: drop objects within the target database before recreating them. The database must already exist. Mutually exclusive with `recreate`. |
 | `recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. The `postgres` database is never dropped — it is restored with `--clean --if-exists` instead. Mutually exclusive with `clean`. |
 | `no_globals` | `false` | When `true`, skips feeding the globals file to `psql`. By default globals are restored automatically when present. |

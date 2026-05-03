@@ -35,6 +35,10 @@
       "minLength": 1,
       "description": "Target database for pg_restore when restoring a single-database dump. If omitted, the database name is inferred from the dump filename. Not used when restoring a full pg_dumpall dump (all.sql)."
     },
+    "databases": {
+      "type": "string",
+      "description": "Comma-separated list of database names to restore. When set, only .dump files matching one of these names are restored; all others are skipped. Globals (00000-globals.sql) are always restored regardless of this filter (unless no_globals=true). Example: myapp,myother."
+    },
     "clean": {
       "type": "boolean",
       "description": "When true, passes --clean --if-exists to pg_restore, dropping objects within the target database before recreating them. The database must already exist. Mutually exclusive with recreate. Defaults to false."

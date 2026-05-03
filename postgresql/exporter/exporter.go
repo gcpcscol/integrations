@@ -20,18 +20,19 @@ func init() {
 }
 
 type Exporter struct {
-	conn             pgconn.ConnConfig
-	database         string // target database; if empty, inferred from dump filename
-	noOwner          bool   // pass --no-owner to pg_restore
-	exitOnError      bool   // pass -e to pg_restore / ON_ERROR_STOP=1 to psql
-	clean            bool   // pass --clean --if-exists to pg_restore: drop objects before recreating
-	recreate  bool   // pass -C --clean --if-exists: drop the database and recreate it from archive metadata
-	schemaOnly       bool   // pass -s to pg_restore
-	dataOnly         bool   // pass -a to pg_restore
-	noGlobals        bool   // skip feeding 00000-globals.sql to psql
-	pgBinDir         string // directory containing pg_restore, psql; empty means use $PATH
-	connType         string // returned by Type()
-	TokenProvider    func(context.Context) (string, error) // optional; refreshes conn.Password before each subprocess
+	conn              pgconn.ConnConfig
+	database          string            // target database; if empty, inferred from dump filename
+	databases         map[string]struct{} // if non-empty, only restore dumps for these databases
+	noOwner           bool              // pass --no-owner to pg_restore
+	exitOnError       bool              // pass -e to pg_restore / ON_ERROR_STOP=1 to psql
+	clean             bool              // pass --clean --if-exists to pg_restore: drop objects before recreating
+	recreate          bool              // pass -C --clean --if-exists: drop the database and recreate it from archive metadata
+	schemaOnly        bool              // pass -s to pg_restore
+	dataOnly          bool              // pass -a to pg_restore
+	noGlobals         bool              // skip feeding 00000-globals.sql to psql
+	pgBinDir          string            // directory containing pg_restore, psql; empty means use $PATH
+	connType          string            // returned by Type()
+	TokenProvider     func(context.Context) (string, error) // optional; refreshes conn.Password before each subprocess
 }
 
 // bin returns the full path to a PostgreSQL binary.
@@ -57,6 +58,14 @@ func NewExporterFromConfigMap(conn pgconn.ConnConfig, dbPath, connType string, c
 	var err error
 	if db, ok := config["database"]; ok && db != "" {
 		exp.database = db
+	}
+	if v, ok := config["databases"]; ok && v != "" {
+		exp.databases = make(map[string]struct{})
+		for _, name := range strings.Split(v, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				exp.databases[name] = struct{}{}
+			}
+		}
 	}
 	if v, ok := config["no_owner"]; ok && v != "" {
 		exp.noOwner, err = strconv.ParseBool(v)
@@ -179,12 +188,36 @@ loop:
 	return nil
 }
 
+// dumpBaseName extracts the database name from a dump filename.
+// e.g. "/00001-myapp.dump" → "myapp", "/myapp.dump" → "myapp".
+func dumpBaseName(pathname string) string {
+	base := strings.TrimSuffix(filepath.Base(pathname), ".dump")
+	if idx := strings.Index(base, "-"); idx > 0 {
+		allDigits := true
+		for _, c := range base[:idx] {
+			if c < '0' || c > '9' {
+				allDigits = false
+				break
+			}
+		}
+		if allDigits {
+			return base[idx+1:]
+		}
+	}
+	return base
+}
+
 func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error {
 	// manifest.json is metadata only; nothing to restore.
 	if record.Pathname == "manifest.json" {
 		return nil
 	}
 	if strings.HasSuffix(record.Pathname, ".dump") {
+		if len(p.databases) > 0 {
+			if _, ok := p.databases[dumpBaseName(record.Pathname)]; !ok {
+				return nil
+			}
+		}
 		return p.pgRestore(ctx, record.Reader, record.Pathname)
 	}
 	if record.Pathname == "00000-globals.sql" {
@@ -228,22 +261,7 @@ func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) 
 	// Resolve target database name from the explicit config or the filename.
 	targetDB := p.database
 	if targetDB == "" {
-		base := strings.TrimSuffix(filepath.Base(pathname), ".dump")
-		// Strip leading numeric prefix from all-databases backup naming
-		// (e.g. "00001-mydb" → "mydb").
-		if idx := strings.Index(base, "-"); idx > 0 {
-			allDigits := true
-			for _, c := range base[:idx] {
-				if c < '0' || c > '9' {
-					allDigits = false
-					break
-				}
-			}
-			if allDigits {
-				base = base[idx+1:]
-			}
-		}
-		targetDB = base
+		targetDB = dumpBaseName(pathname)
 	}
 
 	args := p.conn.Args()
