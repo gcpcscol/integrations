@@ -193,9 +193,6 @@ func (p *Exporter) restore(ctx context.Context, record *connectors.Record) error
 		}
 		return nil
 	}
-	if strings.HasSuffix(record.Pathname, ".sql") {
-		return p.psqlRestore(ctx, record.Reader)
-	}
 	return fmt.Errorf("unable to restore file %q", record.Pathname)
 }
 
