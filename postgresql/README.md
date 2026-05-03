@@ -6,8 +6,8 @@ This integration provides two independent backup strategies for PostgreSQL:
 
 | Protocol | Tool | Granularity | Restore requires |
 |---|---|---|---|
-| `postgres://` | `pg_dump` / `pg_dumpall` | logical (SQL) | a running PostgreSQL server |
-| `postgres+aws://` | `pg_dump` / `pg_dumpall` + AWS IAM token | logical (SQL) | a running PostgreSQL server |
+| `postgres://` | `pg_dump` + `pg_dumpall --globals-only` | logical (SQL) | a running PostgreSQL server |
+| `postgres+aws://` | `pg_dump` + `pg_dumpall --globals-only` + AWS IAM token | logical (SQL) | a running PostgreSQL server |
 | `postgres+bin://` | `pg_basebackup` | physical (binary) | any file-restore connector |
 
 ---
@@ -113,8 +113,8 @@ restored roles will have no password set.
 | `recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. Safe to use on both empty and populated clusters. The `postgres` database is never dropped — it is restored with `--clean --if-exists` instead, mirroring `pg_dumpall` behaviour. Mutually exclusive with `clean`. |
 | `no_globals` | `false` | When `true`, skips feeding `00000-globals.sql` to `psql`. By default globals are restored automatically when present, recreating roles and tablespaces on the target server before any database dump is applied. Set to `true` when the target server already has the required roles and tablespaces and you want to skip the globals step. |
 | `no_owner` | `false` | Pass `--no-owner` to `pg_restore`, skipping `ALTER OWNER` statements. Useful when roles from the source server do not exist on the target. |
-| `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. Not applicable to `pg_dumpall` restores. |
-| `data_only` | `false` | Restore only the data (no schema). Mutually exclusive with `schema_only`. Not applicable to `pg_dumpall` restores. |
+| `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. |
+| `data_only` | `false` | Restore only the data (no schema). Mutually exclusive with `schema_only`. |
 | `exit_on_error` | `false` | Stop on the first restore error. Applies to both `pg_restore` (`-e`) and `psql` (`ON_ERROR_STOP=1`). |
 | `pg_bin_dir` | — | Directory containing the PostgreSQL client binaries (`pg_restore`, `psql`). When omitted, binaries are resolved via `$PATH`. Useful when multiple PostgreSQL versions are installed. |
 | `ssl_mode` | `prefer` | SSL mode: `disable`, `allow`, `prefer`, `require`, `verify-ca`, or `verify-full`. Passed via `PGSSLMODE`. |

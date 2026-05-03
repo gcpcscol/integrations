@@ -33,7 +33,7 @@
     "database": {
       "type": "string",
       "minLength": 1,
-      "description": "Target database for pg_restore when restoring a single-database dump. If omitted, the database name is inferred from the dump filename. Not used when restoring a full pg_dumpall dump (all.sql)."
+      "description": "Target database for pg_restore. If omitted, the database name is inferred from the dump filename. Not used with recreate (the name is taken from the archive metadata in that case)."
     },
     "databases": {
       "type": "string",
@@ -61,11 +61,11 @@
     },
     "schema_only": {
       "type": "boolean",
-      "description": "When true, passes -s to pg_restore to restore only schema (no data). Mutually exclusive with data_only. Not applicable to pg_dumpall restores."
+      "description": "When true, passes -s to pg_restore to restore only schema (no data). Mutually exclusive with data_only."
     },
     "data_only": {
       "type": "boolean",
-      "description": "When true, passes -a to pg_restore to restore only data (no schema). Mutually exclusive with schema_only. Not applicable to pg_dumpall restores."
+      "description": "When true, passes -a to pg_restore to restore only data (no schema). Mutually exclusive with schema_only."
     },
     "pg_bin_dir": {
       "type": "string",

@@ -30,20 +30,13 @@ func NewAWSExporter(appCtx context.Context, opts *connectors.Options, name strin
 		return nil, fmt.Errorf("postgres+aws: username is required for IAM authentication")
 	}
 
-	// Generate an initial token for the Ping call that happens at construction time.
-	token, err := awsauth.GenerateDBAuthToken(appCtx, conn.Host, conn.Port, conn.Username, region)
-	if err != nil {
-		return nil, err
-	}
-	conn.Password = token
-
 	exp, err := pqexporter.NewExporterFromConfigMap(conn, dbPath, "postgresql+aws", cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// Refresh the token before each pg_restore / psql subprocess so that
-	// slow restores are not affected by the token's short lifetime (~15 min).
+	// The token is generated just before each connection or subprocess so that
+	// short-lived IAM tokens (~15 min) are always fresh when they are used.
 	exp.TokenProvider = func(ctx context.Context) (string, error) {
 		return awsauth.GenerateDBAuthToken(ctx, conn.Host, conn.Port, conn.Username, region)
 	}
