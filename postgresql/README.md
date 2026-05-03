@@ -108,7 +108,7 @@ restored roles will have no password set.
 | `password` | — | PostgreSQL password. Overrides the URI password. |
 | `database` | — | Target database for `pg_restore`. If omitted, the name is inferred from the dump filename (e.g. `00001-myapp.dump` → `myapp`). Not used with `drop_and_recreate` (the target database name is taken from the archive in that case). |
 | `clean` | `false` | Pass `--clean --if-exists` to `pg_restore`: drop objects within the target database before recreating them. The database itself must already exist. Mutually exclusive with `drop_and_recreate`. |
-| `drop_and_recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. Safe to use on both empty and populated clusters. Mutually exclusive with `clean`. |
+| `drop_and_recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. Safe to use on both empty and populated clusters. The `postgres` database is never dropped — it is restored with `--clean --if-exists` instead, mirroring `pg_dumpall` behaviour. Mutually exclusive with `clean`. |
 | `no_globals` | `false` | When `true`, skips feeding the globals file (`globals.sql` for single-database backups, `00000-globals.sql` for all-databases backups) to `psql`. By default globals are restored automatically when present, recreating roles and tablespaces on the target server before any database dump is applied. Set to `true` when the target server already has the required roles and tablespaces and you want to skip the globals step. |
 | `no_owner` | `false` | Pass `--no-owner` to `pg_restore`, skipping `ALTER OWNER` statements. Useful when roles from the source server do not exist on the target. |
 | `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. Not applicable to `pg_dumpall` restores. |
@@ -325,7 +325,7 @@ the password for the restore connection.
 | `region` | — | AWS region of the RDS instance (required), e.g. `us-east-1`. |
 | `database` | — | Target database for `pg_restore`. If omitted, the name is inferred from the dump filename. Not used with `drop_and_recreate`. |
 | `clean` | `false` | Pass `--clean --if-exists` to `pg_restore`: drop objects within the target database before recreating them. The database must already exist. Mutually exclusive with `drop_and_recreate`. |
-| `drop_and_recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. Mutually exclusive with `clean`. |
+| `drop_and_recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. The `postgres` database is never dropped — it is restored with `--clean --if-exists` instead. Mutually exclusive with `clean`. |
 | `no_globals` | `false` | When `true`, skips feeding the globals file to `psql`. By default globals are restored automatically when present. |
 | `no_owner` | `false` | Pass `--no-owner` to `pg_restore`, skipping `ALTER OWNER` statements. |
 | `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. |

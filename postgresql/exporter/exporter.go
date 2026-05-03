@@ -217,37 +217,48 @@ func (p *Exporter) refreshToken(ctx context.Context) error {
 // clean=true: drops objects within the database before recreating them
 // (-d <targetdb> --clean --if-exists); the database itself must already exist.
 // drop_and_recreate=true: drops the whole database and recreates it from the
-// archive metadata (-C --clean --if-exists -d postgres); the target database
-// name is taken from the archive, not from the database parameter.
+// archive metadata (-C --clean --if-exists -d postgres).  The "postgres"
+// database is special-cased: like pg_dumpall, we never try to drop it —
+// instead we restore into it with --clean --if-exists.
 func (p *Exporter) pgRestore(ctx context.Context, r io.Reader, pathname string) error {
 	if err := p.refreshToken(ctx); err != nil {
 		return err
 	}
-	args := p.conn.Args()
-	if p.dropAndRecreate {
-		args = append(args, "-C", "--clean", "--if-exists", "-d", "postgres")
-	} else {
-		targetDB := p.database
-		if targetDB == "" {
-			base := strings.TrimSuffix(filepath.Base(pathname), ".dump")
-			// Strip leading numeric prefix from all-databases backup naming
-			// (e.g. "00001-mydb" → "mydb").
-			if idx := strings.Index(base, "-"); idx > 0 {
-				allDigits := true
-				for _, c := range base[:idx] {
-					if c < '0' || c > '9' {
-						allDigits = false
-						break
-					}
-				}
-				if allDigits {
-					base = base[idx+1:]
+
+	// Resolve target database name from the explicit config or the filename.
+	targetDB := p.database
+	if targetDB == "" {
+		base := strings.TrimSuffix(filepath.Base(pathname), ".dump")
+		// Strip leading numeric prefix from all-databases backup naming
+		// (e.g. "00001-mydb" → "mydb").
+		if idx := strings.Index(base, "-"); idx > 0 {
+			allDigits := true
+			for _, c := range base[:idx] {
+				if c < '0' || c > '9' {
+					allDigits = false
+					break
 				}
 			}
-			targetDB = base
+			if allDigits {
+				base = base[idx+1:]
+			}
 		}
+		targetDB = base
+	}
+
+	args := p.conn.Args()
+	if p.dropAndRecreate && targetDB != "postgres" {
+		// Drop and recreate the database from the archive metadata.
+		// "postgres" is excluded: it always exists and cannot be dropped,
+		// mirroring the behaviour of pg_dumpall which never emits
+		// CREATE DATABASE for it.
+		args = append(args, "-C", "--clean", "--if-exists", "-d", "postgres")
+	} else {
 		args = append(args, "-d", targetDB)
-		if p.clean {
+		if p.clean || p.dropAndRecreate {
+			// drop_and_recreate on "postgres" falls back to --clean --if-exists:
+			// restore objects into the existing database without touching the
+			// database itself.
 			args = append(args, "--clean", "--if-exists")
 		}
 	}
