@@ -88,6 +88,7 @@ restored roles will have no password set.
 | `username` | — | PostgreSQL username. Overrides the URI user. |
 | `password` | — | PostgreSQL password. Overrides the URI password. |
 | `database` | — | Database to back up. If omitted, all connectable databases are backed up. Overrides the URI path. |
+| `exclude_databases` | — | Comma-separated list of database names to skip during a full backup (e.g. `rdsadmin,template1`). Has no effect when a single database is selected. |
 | `compress` | `false` | Enable `pg_dump` compression. By default dumps are stored uncompressed so that Plakar's own compression is not degraded. |
 | `schema_only` | `false` | Dump only the schema (no data). Mutually exclusive with `data_only`. |
 | `data_only` | `false` | Dump only the data (no schema). Mutually exclusive with `schema_only`. |
@@ -287,6 +288,7 @@ functions (execution role).
 | `username` | — | PostgreSQL username (required). Must be an IAM-enabled database user. Overrides the URI user. |
 | `region` | — | AWS region of the RDS instance (required), e.g. `us-east-1`. |
 | `database` | — | Database to back up. If omitted, all connectable databases are backed up individually (`/00000-globals.sql` + one `.dump` per database). Overrides the URI path. |
+| `exclude_databases` | `rdsadmin` | Comma-separated list of database names to skip during a full backup. Defaults to `rdsadmin` (an internal AWS system database that cannot be dumped). Set to an empty string to disable all exclusions. |
 | `compress` | `false` | Enable `pg_dump` compression. By default dumps are stored uncompressed so that Plakar's own compression is not degraded. |
 | `schema_only` | `false` | Dump only the schema (no data). Mutually exclusive with `data_only`. |
 | `data_only` | `false` | Dump only the data (no schema). Mutually exclusive with `schema_only`. |

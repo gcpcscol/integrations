@@ -31,6 +31,13 @@ func NewAWSImporter(appCtx context.Context, opts *connectors.Options, name strin
 		return nil, fmt.Errorf("postgres+aws: username is required for IAM authentication")
 	}
 
+	// Default to excluding rdsadmin — an internal AWS system database that
+	// regular users cannot dump.  Users can override this by setting
+	// exclude_databases explicitly (including to an empty string to exclude nothing).
+	if _, set := cfg["exclude_databases"]; !set {
+		cfg["exclude_databases"] = "rdsadmin"
+	}
+
 	imp, err := pqimporter.NewImporterFromConfigMap(conn, dbPath, "postgresql+aws", cfg)
 	if err != nil {
 		return nil, err

@@ -126,6 +126,9 @@ func (p *Exporter) Type() string          { return p.connType }
 func (p *Exporter) Flags() location.Flags { return 0 }
 
 func (p *Exporter) Ping(ctx context.Context) error {
+	if err := p.refreshToken(ctx); err != nil {
+		return err
+	}
 	return p.conn.Ping(ctx, p.database)
 }
 

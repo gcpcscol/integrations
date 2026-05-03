@@ -26,14 +26,15 @@ func init() {
 }
 
 type Importer struct {
-	conn          pgconn.ConnConfig
-	database      string // empty means back up all databases
-	compress      bool   // enable pg_dump compression; off by default to avoid degrading Plakar's compression
-	schemaOnly    bool   // pass -s: dump schema only
-	dataOnly      bool   // pass -a: dump data only
-	pgBinDir      string // directory containing pg_dump, pg_dumpall, psql; empty means use $PATH
-	connType      string // returned by Type(); if empty, "postgresql" is used
-	TokenProvider func(context.Context) (string, error) // optional; refreshes conn.Password before each subprocess
+	conn             pgconn.ConnConfig
+	database         string            // empty means back up all databases
+	excludeDatabases map[string]struct{} // databases to skip in a full backup
+	compress         bool              // enable pg_dump compression; off by default to avoid degrading Plakar's compression
+	schemaOnly       bool              // pass -s: dump schema only
+	dataOnly         bool              // pass -a: dump data only
+	pgBinDir         string            // directory containing pg_dump, pg_dumpall, psql; empty means use $PATH
+	connType         string            // returned by Type(); if empty, "postgresql" is used
+	TokenProvider    func(context.Context) (string, error) // optional; refreshes conn.Password before each subprocess
 }
 
 // bin returns the full path to a PostgreSQL binary.
@@ -58,6 +59,15 @@ func NewImporterFromConfigMap(conn pgconn.ConnConfig, dbPath, connType string, c
 	var pgBinDir string
 	if v, ok := config["pg_bin_dir"]; ok && v != "" {
 		pgBinDir = v
+	}
+
+	excludeDatabases := make(map[string]struct{})
+	if v, ok := config["exclude_databases"]; ok && v != "" {
+		for _, name := range strings.Split(v, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				excludeDatabases[name] = struct{}{}
+			}
+		}
 	}
 
 	var (
@@ -87,13 +97,14 @@ func NewImporterFromConfigMap(conn pgconn.ConnConfig, dbPath, connType string, c
 	}
 
 	return &Importer{
-		conn:       conn,
-		database:   database,
-		compress:   compress,
-		schemaOnly: schemaOnly,
-		dataOnly:   dataOnly,
-		pgBinDir:   pgBinDir,
-		connType:   connType,
+		conn:             conn,
+		database:         database,
+		excludeDatabases: excludeDatabases,
+		compress:         compress,
+		schemaOnly:       schemaOnly,
+		dataOnly:         dataOnly,
+		pgBinDir:         pgBinDir,
+		connType:         connType,
 	}, nil
 }
 
@@ -171,6 +182,9 @@ func (p *Importer) noRolePasswordsArgs(ctx context.Context, args []string) []str
 // listDatabases returns the names of all databases with datallowconn = true,
 // ordered by name.  This matches the set of databases that pg_dumpall dumps.
 func (p *Importer) listDatabases(ctx context.Context) ([]string, error) {
+	if err := p.refreshToken(ctx); err != nil {
+		return nil, err
+	}
 	db, err := p.conn.Open("postgres")
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
@@ -220,6 +234,9 @@ func (p *Importer) dumpAllDatabases(ctx context.Context, records chan<- *connect
 	n := 0
 	for _, dbname := range databases {
 		if p.database != "" && dbname != p.database {
+			continue
+		}
+		if _, excluded := p.excludeDatabases[dbname]; excluded {
 			continue
 		}
 		n++
