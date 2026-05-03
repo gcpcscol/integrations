@@ -106,6 +106,9 @@ func NewImporter(appCtx context.Context, opts *connectors.Options, name string, 
 }
 
 func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.Record, dumpFormat string) error {
+	if err := p.refreshToken(ctx); err != nil {
+		return err
+	}
 	return manifest.EmitLogicalManifest(ctx, manifest.LogicalConfig{
 		PgDumpBin:  p.bin("pg_dump"),
 		Conn:       p.conn,
@@ -122,9 +125,6 @@ func (p *Importer) emitManifest(ctx context.Context, records chan<- *connectors.
 func (p *Importer) Import(ctx context.Context, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
 	defer close(records)
 
-	if err := p.refreshToken(ctx); err != nil {
-		return err
-	}
 	if err := p.emitManifest(ctx, records, "custom"); err != nil {
 		return err
 	}
