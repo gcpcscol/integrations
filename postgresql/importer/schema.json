@@ -33,15 +33,19 @@
     "database": {
       "type": "string",
       "minLength": 1,
-      "description": "Name of the database to back up using pg_dump. If omitted, all databases are backed up using pg_dumpall. Overrides the database in the location URI."
+      "description": "Name of the database to back up. If omitted, all connectable databases are backed up individually. Overrides the database in the location URI."
+    },
+    "exclude_databases": {
+      "type": "string",
+      "description": "Comma-separated list of database names to skip during a full backup. Has no effect when a single database is selected via the database parameter or URI path. Example: rdsadmin,template1."
     },
     "schema_only": {
       "type": "boolean",
-      "description": "When true, passes -s to pg_dump/pg_dumpall to dump only schema (no data). Mutually exclusive with data_only."
+      "description": "When true, passes -s to pg_dump to dump only schema (no data). Mutually exclusive with data_only."
     },
     "data_only": {
       "type": "boolean",
-      "description": "When true, passes -a to pg_dump/pg_dumpall to dump only data (no schema). Mutually exclusive with schema_only."
+      "description": "When true, passes -a to pg_dump to dump only data (no schema). Mutually exclusive with schema_only."
     },
     "pg_bin_dir": {
       "type": "string",

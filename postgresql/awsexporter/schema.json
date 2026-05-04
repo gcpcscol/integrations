@@ -35,13 +35,21 @@
       "minLength": 1,
       "description": "Target database for pg_restore when restoring a single-database dump. If omitted, the database name is inferred from the dump filename."
     },
-    "create_db": {
-      "type": "boolean",
-      "description": "When true, passes -C to pg_restore so the target database is created from the archive metadata."
+    "databases": {
+      "type": "string",
+      "description": "Comma-separated list of database names to restore. When set, only .dump files matching one of these names are restored; all others are skipped. Globals (00000-globals.sql) are always restored regardless of this filter (unless no_globals=true). Example: myapp,myother."
     },
-    "restore_globals": {
+    "clean": {
       "type": "boolean",
-      "description": "When true, feeds globals.sql to psql before restoring the database dump."
+      "description": "When true, passes --clean --if-exists to pg_restore, dropping objects within the target database before recreating them. The database must already exist. Mutually exclusive with recreate. Defaults to false."
+    },
+    "recreate": {
+      "type": "boolean",
+      "description": "When true, passes -C --clean --if-exists to pg_restore: the entire target database is dropped and recreated from the archive metadata. The target database name is taken from the archive. The 'postgres' database is never dropped — it is restored with --clean --if-exists instead, mirroring pg_dumpall behaviour. Mutually exclusive with clean. Defaults to false."
+    },
+    "no_globals": {
+      "type": "boolean",
+      "description": "When true, skips feeding the globals file to psql. By default globals are restored automatically when present. Defaults to false."
     },
     "no_owner": {
       "type": "boolean",

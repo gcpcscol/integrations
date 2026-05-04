@@ -6,8 +6,8 @@ This integration provides two independent backup strategies for PostgreSQL:
 
 | Protocol | Tool | Granularity | Restore requires |
 |---|---|---|---|
-| `postgres://` | `pg_dump` / `pg_dumpall` | logical (SQL) | a running PostgreSQL server |
-| `postgres+aws://` | `pg_dump` / `pg_dumpall` + AWS IAM token | logical (SQL) | a running PostgreSQL server |
+| `postgres://` | `pg_dump` + `pg_dumpall --globals-only` | logical (SQL) | a running PostgreSQL server |
+| `postgres+aws://` | `pg_dump` + `pg_dumpall --globals-only` + AWS IAM token | logical (SQL) | a running PostgreSQL server |
 | `postgres+bin://` | `pg_basebackup` | physical (binary) | any file-restore connector |
 
 ---
@@ -19,17 +19,21 @@ This integration provides two independent backup strategies for PostgreSQL:
 The importer connects to a running PostgreSQL server and produces a logical
 dump — a portable, version-independent representation of the data.
 
-- **Single database** (`database` parameter or `/dbname` in the URI):
-  runs `pg_dump -Fc` (custom binary format) and stores **two records**
-  in the snapshot:
-  - `/globals.sql` — a `pg_dumpall --globals-only` dump containing the
-    roles and tablespaces of the whole cluster.
-  - `/<dbname>.dump` — the database itself in pg_dump custom format.
+Both single-database and all-databases backups follow the same layout:
 
-- **All databases** (no `database` parameter):
-  runs `pg_dumpall` (plain SQL format) and stores **one record**
-  named `/all.sql` in the snapshot.  This already includes global objects
-  such as roles and tablespaces.
+- `/00000-globals.sql` — a `pg_dumpall --globals-only` dump containing
+  roles and tablespaces of the whole cluster.
+- `/00001-<dbname>.dump`, `/00002-<dbname>.dump`, … — one `pg_dump -Fc`
+  custom-format file per database, numbered in alphabetical order.
+
+When a **single database** is requested (`database` parameter or `/dbname`
+in the URI), only the matching database is dumped — the globals file and
+one numbered `.dump` file are produced.  When **all databases** are
+requested (no `database` parameter), every database with
+`datallowconn = true` is dumped (this naturally excludes `template0`).
+
+The numeric prefix guarantees that globals are always restored before any
+database dump (restores process files in lexicographic order).
 
 In both cases a `/manifest.json` record is also written to the snapshot
 before the dump data, containing cluster-level metadata (roles, tablespaces,
@@ -37,8 +41,9 @@ database list, schema and relation details).  See the [Manifest](#manifest)
 section below for details.
 
 Restore dispatches on file name and extension: `.dump` files are fed to
-`pg_restore`; `globals.sql` is fed to `psql` only when `restore_globals`
-is enabled; `all.sql` is always fed to `psql`.
+`pg_restore` (the database name is inferred from the filename);
+`00000-globals.sql` is fed to `psql` automatically (unless `no_globals`
+is set).
 
 ### Pros and cons
 
@@ -82,7 +87,8 @@ restored roles will have no password set.
 | `port` | `5432` | Server port. Overrides the URI port. |
 | `username` | — | PostgreSQL username. Overrides the URI user. |
 | `password` | — | PostgreSQL password. Overrides the URI password. |
-| `database` | — | Database to back up. If omitted, all databases are backed up via `pg_dumpall`. Overrides the URI path. When set, a globals dump (`/globals.sql`) is also produced automatically. |
+| `database` | — | Database to back up. If omitted, all connectable databases are backed up. Overrides the URI path. |
+| `exclude_databases` | — | Comma-separated list of database names to skip during a full backup (e.g. `rdsadmin,template1`). Has no effect when a single database is selected. |
 | `compress` | `false` | Enable `pg_dump` compression. By default dumps are stored uncompressed so that Plakar's own compression is not degraded. |
 | `schema_only` | `false` | Dump only the schema (no data). Mutually exclusive with `data_only`. |
 | `data_only` | `false` | Dump only the data (no schema). Mutually exclusive with `schema_only`. |
@@ -101,12 +107,14 @@ restored roles will have no password set.
 | `port` | `5432` | Server port. Overrides the URI port. |
 | `username` | — | PostgreSQL username. Overrides the URI user. |
 | `password` | — | PostgreSQL password. Overrides the URI password. |
-| `database` | — | Controls the `-d` argument passed to `pg_restore` or `psql` (see `create_db` below). If omitted, the name is inferred from the dump filename (e.g. `myapp.dump` → `myapp`). |
-| `create_db` | `false` | When `false` (default), `-d` names the **target database**, which must already exist. When `true`, passes `-C` to `pg_restore`: the database is created from the metadata embedded in the archive, and `-d` names only the **initial connection database** (defaults to `postgres` if unset). Use `true` for a fresh restore onto a server that does not yet have the target database. |
-| `restore_globals` | `false` | When `true`, feeds `/globals.sql` to `psql` before restoring the database dump, recreating roles and tablespaces on the target server. Useful when restoring to a different server where the source roles do not exist and `no_owner` is not sufficient — for example, when the database uses row-level security, relies on specific role memberships, or references tablespaces that must exist before the data is loaded. Not needed for `pg_dumpall` restores (`all.sql`), which already contain global objects. |
+| `database` | — | Target database for `pg_restore`. If omitted, the name is inferred from the dump filename (e.g. `00001-myapp.dump` → `myapp`). Not used with `recreate` (the target database name is taken from the archive in that case). |
+| `databases` | — | Comma-separated list of database names to restore from a full backup. Only `.dump` files matching one of these names are restored; others are skipped. Globals are always restored unless `no_globals=true`. Example: `myapp,myother`. |
+| `clean` | `false` | Pass `--clean --if-exists` to `pg_restore`: drop objects within the target database before recreating them. The database itself must already exist. Mutually exclusive with `recreate`. |
+| `recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. Safe to use on both empty and populated clusters. The `postgres` database is never dropped — it is restored with `--clean --if-exists` instead, mirroring `pg_dumpall` behaviour. Mutually exclusive with `clean`. |
+| `no_globals` | `false` | When `true`, skips feeding `00000-globals.sql` to `psql`. By default globals are restored automatically when present, recreating roles and tablespaces on the target server before any database dump is applied. Set to `true` when the target server already has the required roles and tablespaces and you want to skip the globals step. |
 | `no_owner` | `false` | Pass `--no-owner` to `pg_restore`, skipping `ALTER OWNER` statements. Useful when roles from the source server do not exist on the target. |
-| `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. Not applicable to `pg_dumpall` restores. |
-| `data_only` | `false` | Restore only the data (no schema). Mutually exclusive with `schema_only`. Not applicable to `pg_dumpall` restores. |
+| `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. |
+| `data_only` | `false` | Restore only the data (no schema). Mutually exclusive with `schema_only`. |
 | `exit_on_error` | `false` | Stop on the first restore error. Applies to both `pg_restore` (`-e`) and `psql` (`ON_ERROR_STOP=1`). |
 | `pg_bin_dir` | — | Directory containing the PostgreSQL client binaries (`pg_restore`, `psql`). When omitted, binaries are resolved via `$PATH`. Useful when multiple PostgreSQL versions are installed. |
 | `ssl_mode` | `prefer` | SSL mode: `disable`, `allow`, `prefer`, `require`, `verify-ca`, or `verify-full`. Passed via `PGSSLMODE`. |
@@ -125,12 +133,23 @@ plakar backup @mypg
 plakar source add mypg postgres://postgres:secret@db.example.com/
 plakar backup @mypg
 
-# Restore a single database (created automatically if absent)
+# Restore into an existing database (default — database must already exist)
 plakar destination add mypgdst postgres://postgres:secret@db.example.com/myapp
 plakar restore -to @mypgdst <snapid>
 
-# Restore all databases to a fresh server
-plakar destination add mypgdst postgres://postgres:secret@db.example.com/
+# Restore, dropping objects first so stale objects do not linger (database must exist)
+plakar destination add mypgdst postgres://postgres:secret@db.example.com/myapp \
+    clean=true
+plakar restore -to @mypgdst <snapid>
+
+# Restore, dropping and recreating the database entirely (safe for fresh or existing clusters)
+plakar destination add mypgdst postgres://postgres:secret@db.example.com/ \
+    recreate=true
+plakar restore -to @mypgdst <snapid>
+
+# Restore a single database from a full backup
+plakar destination add mypgdst postgres://postgres:secret@db.example.com/ \
+    databases=myapp recreate=true
 plakar restore -to @mypgdst <snapid>
 
 # Restore, skipping owner assignment (e.g. roles differ on target)
@@ -274,7 +293,8 @@ functions (execution role).
 | `port` | `5432` | RDS instance port. Overrides the URI port. |
 | `username` | — | PostgreSQL username (required). Must be an IAM-enabled database user. Overrides the URI user. |
 | `region` | — | AWS region of the RDS instance (required), e.g. `us-east-1`. |
-| `database` | — | Database to back up. If omitted, all databases are backed up via `pg_dumpall`. Overrides the URI path. |
+| `database` | — | Database to back up. If omitted, all connectable databases are backed up individually (`/00000-globals.sql` + one `.dump` per database). Overrides the URI path. |
+| `exclude_databases` | `rdsadmin` | Comma-separated list of database names to skip during a full backup. Defaults to `rdsadmin` (an internal AWS system database that cannot be dumped). Set to an empty string to disable all exclusions. |
 | `compress` | `false` | Enable `pg_dump` compression. By default dumps are stored uncompressed so that Plakar's own compression is not degraded. |
 | `schema_only` | `false` | Dump only the schema (no data). Mutually exclusive with `data_only`. |
 | `data_only` | `false` | Dump only the data (no schema). Mutually exclusive with `schema_only`. |
@@ -311,9 +331,11 @@ the password for the restore connection.
 | `port` | `5432` | RDS instance port. Overrides the URI port. |
 | `username` | — | PostgreSQL username (required). Must be an IAM-enabled database user. Overrides the URI user. |
 | `region` | — | AWS region of the RDS instance (required), e.g. `us-east-1`. |
-| `database` | — | Controls the `-d` argument passed to `pg_restore` or `psql`. If omitted, the name is inferred from the dump filename. |
-| `create_db` | `false` | When `true`, passes `-C` to `pg_restore`: the database is created from the archive metadata, and `-d` names only the initial connection database. |
-| `restore_globals` | `false` | When `true`, feeds `/globals.sql` to `psql` before restoring the database dump, recreating roles and tablespaces. |
+| `database` | — | Target database for `pg_restore`. If omitted, the name is inferred from the dump filename. Not used with `recreate`. |
+| `databases` | — | Comma-separated list of database names to restore from a full backup. Only `.dump` files matching one of these names are restored; others are skipped. Globals are always restored unless `no_globals=true`. Example: `myapp,myother`. |
+| `clean` | `false` | Pass `--clean --if-exists` to `pg_restore`: drop objects within the target database before recreating them. The database must already exist. Mutually exclusive with `recreate`. |
+| `recreate` | `false` | Pass `-C --clean --if-exists` to `pg_restore`: drop the entire target database and recreate it from the archive metadata. The `postgres` database is never dropped — it is restored with `--clean --if-exists` instead. Mutually exclusive with `clean`. |
+| `no_globals` | `false` | When `true`, skips feeding the globals file to `psql`. By default globals are restored automatically when present. |
 | `no_owner` | `false` | Pass `--no-owner` to `pg_restore`, skipping `ALTER OWNER` statements. |
 | `schema_only` | `false` | Restore only the schema (no data). Mutually exclusive with `data_only`. |
 | `data_only` | `false` | Restore only the data (no schema). Mutually exclusive with `schema_only`. |
@@ -327,14 +349,14 @@ the password for the restore connection.
 ### Exporter examples
 
 ```bash
-# Restore a single database to an RDS instance using IAM authentication
+# Restore into an existing database on RDS using IAM authentication
 plakar destination add myrds postgres+aws://myuser@mydb.cluster-xyz.us-east-1.rds.amazonaws.com/myapp \
     region=us-east-1 ssl_mode=require
 plakar restore -to @myrds <snapid>
 
-# Restore, creating the target database automatically
+# Restore, dropping and recreating the database entirely
 plakar destination add myrds postgres+aws://myuser@mydb.cluster-xyz.us-east-1.rds.amazonaws.com/ \
-    region=us-east-1 ssl_mode=require create_db=true
+    region=us-east-1 ssl_mode=require recreate=true
 plakar restore -to @myrds <snapid>
 
 # Restore, skipping owner assignment (e.g. roles differ on target)

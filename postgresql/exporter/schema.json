@@ -33,15 +33,23 @@
     "database": {
       "type": "string",
       "minLength": 1,
-      "description": "Target database for pg_restore when restoring a single-database dump. If omitted, the database name is inferred from the dump filename. Not used when restoring a full pg_dumpall dump (all.sql)."
+      "description": "Target database for pg_restore. If omitted, the database name is inferred from the dump filename. Not used with recreate (the name is taken from the archive metadata in that case)."
     },
-    "create_db": {
-      "type": "boolean",
-      "description": "When true, passes -C to pg_restore so the target database is created from the archive metadata. The database parameter (or postgres) is used only as the initial connection database. Defaults to false."
+    "databases": {
+      "type": "string",
+      "description": "Comma-separated list of database names to restore. When set, only .dump files matching one of these names are restored; all others are skipped. Globals (00000-globals.sql) are always restored regardless of this filter (unless no_globals=true). Example: myapp,myother."
     },
-    "restore_globals": {
+    "clean": {
       "type": "boolean",
-      "description": "When true, feeds globals.sql (roles and tablespaces) to psql before restoring the database dump. Only relevant for single-database backups; ignored for pg_dumpall restores which already include globals. Defaults to false."
+      "description": "When true, passes --clean --if-exists to pg_restore, dropping objects within the target database before recreating them. The database must already exist. Mutually exclusive with recreate. Defaults to false."
+    },
+    "recreate": {
+      "type": "boolean",
+      "description": "When true, passes -C --clean --if-exists to pg_restore: the entire target database is dropped and recreated from the archive metadata. The target database name is taken from the archive. The 'postgres' database is never dropped — it is restored with --clean --if-exists instead, mirroring pg_dumpall behaviour. Mutually exclusive with clean. Defaults to false."
+    },
+    "no_globals": {
+      "type": "boolean",
+      "description": "When true, skips feeding the globals file (globals.sql or 00000-globals.sql) to psql. By default globals are restored automatically when present. Defaults to false."
     },
     "no_owner": {
       "type": "boolean",
@@ -53,11 +61,11 @@
     },
     "schema_only": {
       "type": "boolean",
-      "description": "When true, passes -s to pg_restore to restore only schema (no data). Mutually exclusive with data_only. Not applicable to pg_dumpall restores."
+      "description": "When true, passes -s to pg_restore to restore only schema (no data). Mutually exclusive with data_only."
     },
     "data_only": {
       "type": "boolean",
-      "description": "When true, passes -a to pg_restore to restore only data (no schema). Mutually exclusive with schema_only. Not applicable to pg_dumpall restores."
+      "description": "When true, passes -a to pg_restore to restore only data (no schema). Mutually exclusive with schema_only."
     },
     "pg_bin_dir": {
       "type": "string",
