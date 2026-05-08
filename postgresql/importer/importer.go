@@ -27,13 +27,13 @@ func init() {
 
 type Importer struct {
 	conn             pgconn.ConnConfig
-	database         string            // empty means back up all databases
-	excludeDatabases map[string]struct{} // databases to skip in a full backup
-	compress         bool              // enable pg_dump compression; off by default to avoid degrading Plakar's compression
-	schemaOnly       bool              // pass -s: dump schema only
-	dataOnly         bool              // pass -a: dump data only
-	pgBinDir         string            // directory containing pg_dump, pg_dumpall, psql; empty means use $PATH
-	connType         string            // returned by Type(); if empty, "postgresql" is used
+	database         string                                // empty means back up all databases
+	excludeDatabases map[string]struct{}                   // databases to skip in a full backup
+	compress         bool                                  // enable pg_dump compression; off by default to avoid degrading Plakar's compression
+	schemaOnly       bool                                  // pass -s: dump schema only
+	dataOnly         bool                                  // pass -a: dump data only
+	pgBinDir         string                                // directory containing pg_dump, pg_dumpall, psql; empty means use $PATH
+	connType         string                                // returned by Type(); if empty, "postgresql" is used
 	TokenProvider    func(context.Context) (string, error) // optional; refreshes conn.Password before each subprocess
 }
 
@@ -353,9 +353,9 @@ func (p *Importer) Close(ctx context.Context) error {
 	p.conn.Cleanup()
 	return nil
 }
-func (p *Importer) Root() string                    { return "/" }
-func (p *Importer) Origin() string                  { return p.conn.Host }
-func (p *Importer) Type() string                    { return p.connType }
+func (p *Importer) Root() string   { return "/" }
+func (p *Importer) Origin() string { return p.conn.Host }
+func (p *Importer) Type() string   { return p.connType }
 
 // Flags returns FLAG_STREAM to signal that Import produces a single streaming
 // pass. Without it, the framework calls Import twice — once to enumerate

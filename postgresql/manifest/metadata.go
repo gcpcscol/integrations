@@ -109,8 +109,8 @@ type RelationInfo struct {
 	Schema            string           `json:"schema"`
 	Name              string           `json:"name"`
 	Owner             string           `json:"owner"`
-	Persistence       string           `json:"persistence"`          // p=permanent, u=unlogged, t=temp
-	Kind              string           `json:"kind"`                  // see above
+	Persistence       string           `json:"persistence"` // p=permanent, u=unlogged, t=temp
+	Kind              string           `json:"kind"`        // see above
 	Tablespace        string           `json:"tablespace,omitempty"`
 	RowEstimate       int64            `json:"row_estimate"`      // reltuples (fast, may be stale)
 	LiveRowEstimate   int64            `json:"live_row_estimate"` // n_live_tup from autovacuum
@@ -505,12 +505,12 @@ ORDER BY n.nspname, c.relname`)
 	relIdx := make(map[string]int) // "schema.name" → position in info.Relations
 	for relRows.Next() {
 		var (
-			schema, name, owner, persistence, kind           string
-			rowEst, liveRowEst                               int64
-			hasPK, hasTriggers, rlsEnabled, rlsForced        bool
-			isPartition                                      bool
+			schema, name, owner, persistence, kind            string
+			rowEst, liveRowEst                                int64
+			hasPK, hasTriggers, rlsEnabled, rlsForced         bool
+			isPartition                                       bool
 			storageOpts, partParent, partStrategy, tablespace string
-			lastVacuumEpoch, lastAnalyzeEpoch                int64
+			lastVacuumEpoch, lastAnalyzeEpoch                 int64
 		)
 		if err := relRows.Scan(
 			&schema, &name, &owner, &persistence, &kind,
