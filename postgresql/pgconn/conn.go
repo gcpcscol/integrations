@@ -31,7 +31,6 @@ func writeTempFile(label, content string) (string, error) {
 	return f.Name(), nil
 }
 
-
 // ConnConfig holds the connection parameters shared by all PostgreSQL connectors.
 type ConnConfig struct {
 	Host     string

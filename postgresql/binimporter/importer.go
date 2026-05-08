@@ -175,9 +175,9 @@ func (p *BinImporter) Close(ctx context.Context) error {
 	p.conn.Cleanup()
 	return nil
 }
-func (p *BinImporter) Root() string                    { return "/" }
-func (p *BinImporter) Origin() string                  { return p.conn.Host }
-func (p *BinImporter) Type() string                    { return "postgres+bin" }
+func (p *BinImporter) Root() string   { return "/" }
+func (p *BinImporter) Origin() string { return p.conn.Host }
+func (p *BinImporter) Type() string   { return "postgres+bin" }
 
 func (p *BinImporter) Flags() location.Flags {
 	// FLAG_STREAM: the tar stream is non-seekable and must be read sequentially.

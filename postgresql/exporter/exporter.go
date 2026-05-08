@@ -20,19 +20,19 @@ func init() {
 }
 
 type Exporter struct {
-	conn              pgconn.ConnConfig
-	database          string            // target database; if empty, inferred from dump filename
-	databases         map[string]struct{} // if non-empty, only restore dumps for these databases
-	noOwner           bool              // pass --no-owner to pg_restore
-	exitOnError       bool              // pass -e to pg_restore / ON_ERROR_STOP=1 to psql
-	clean             bool              // pass --clean --if-exists to pg_restore: drop objects before recreating
-	recreate          bool              // pass -C --clean --if-exists: drop the database and recreate it from archive metadata
-	schemaOnly        bool              // pass -s to pg_restore
-	dataOnly          bool              // pass -a to pg_restore
-	noGlobals         bool              // skip feeding 00000-globals.sql to psql
-	pgBinDir          string            // directory containing pg_restore, psql; empty means use $PATH
-	connType          string            // returned by Type()
-	TokenProvider     func(context.Context) (string, error) // optional; refreshes conn.Password before each subprocess
+	conn          pgconn.ConnConfig
+	database      string                                // target database; if empty, inferred from dump filename
+	databases     map[string]struct{}                   // if non-empty, only restore dumps for these databases
+	noOwner       bool                                  // pass --no-owner to pg_restore
+	exitOnError   bool                                  // pass -e to pg_restore / ON_ERROR_STOP=1 to psql
+	clean         bool                                  // pass --clean --if-exists to pg_restore: drop objects before recreating
+	recreate      bool                                  // pass -C --clean --if-exists: drop the database and recreate it from archive metadata
+	schemaOnly    bool                                  // pass -s to pg_restore
+	dataOnly      bool                                  // pass -a to pg_restore
+	noGlobals     bool                                  // skip feeding 00000-globals.sql to psql
+	pgBinDir      string                                // directory containing pg_restore, psql; empty means use $PATH
+	connType      string                                // returned by Type()
+	TokenProvider func(context.Context) (string, error) // optional; refreshes conn.Password before each subprocess
 }
 
 // bin returns the full path to a PostgreSQL binary.
