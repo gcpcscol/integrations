@@ -10,6 +10,13 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// defaultConnectTimeout is the number of seconds allowed for the initial TCP
+// connection and authentication to complete.  It is applied uniformly to all
+// Go-side connections (via the DSN) and to all subprocess connections (via
+// PGCONNECT_TIMEOUT), so that a packet-dropping firewall is detected quickly
+// rather than hanging indefinitely.
+const defaultConnectTimeout = 10
+
 // sslFileParam describes one SSL file parameter and its inline-content variant.
 type sslFileParam struct {
 	pathKey string  // config key for the file path, e.g. "ssl_cert"
@@ -167,6 +174,7 @@ func (c ConnConfig) Env() []string {
 	if c.SSLRootCert != "" {
 		env = append(env, "PGSSLROOTCERT="+c.SSLRootCert)
 	}
+	env = append(env, fmt.Sprintf("PGCONNECT_TIMEOUT=%d", defaultConnectTimeout))
 	return env
 }
 
@@ -185,6 +193,7 @@ func (c ConnConfig) DSN(dbname string) string {
 		}
 	}
 	q := url.Values{}
+	q.Set("connect_timeout", fmt.Sprintf("%d", defaultConnectTimeout))
 	if c.SSLMode != "" {
 		q.Set("sslmode", c.SSLMode)
 	}
