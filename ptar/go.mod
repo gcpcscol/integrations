@@ -1,4 +1,4 @@
-module github.com/PlakarKorp/integration-ptar
+module github.com/PlakarKorp/integrations/ptar
 
 go 1.24.0
 
