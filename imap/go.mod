@@ -1,4 +1,4 @@
-module github.com/PlakarKorp/integration-imap
+module github.com/PlakarKorp/integrations/imap
 
 go 1.24.0
 
