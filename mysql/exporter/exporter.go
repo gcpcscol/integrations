@@ -134,7 +134,7 @@ func (e *Exporter) restoreSQL(ctx context.Context, record *connectors.Record) er
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
+		if msg := mysqlconn.TruncateOutput(out); msg != "" {
 			return fmt.Errorf("%w: %s", err, msg)
 		}
 		return err
@@ -163,7 +163,7 @@ func (e *Exporter) createDatabase(ctx context.Context, database string) error {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
+		if msg := mysqlconn.TruncateOutput(out); msg != "" {
 			return fmt.Errorf("%w: %s", err, msg)
 		}
 		return err
