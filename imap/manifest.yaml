@@ -17,3 +17,8 @@ connectors:
   protocols: [imap]
   validator: ./exporter/schema.json
   class: compute
+- type: storage
+  executable: imapStorage
+  protocols: [imap]
+  validator: ./store/schema.json
+  class: compute

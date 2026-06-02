@@ -71,3 +71,31 @@ $ plakar destination add myIMAPdst imap://imap.alsomydomain.com:143 username=als
 # restore the snapshot to the destination
 $ plakar restore -to @myIMAPdst <snapid>
 ```
+
+## Using IMAP as a repository (storage)
+
+In addition to importing and exporting mail, this integration can use an IMAP
+account as a **kloset repository** — storing arbitrary backups *inside a
+mailbox*. Each repository resource (packfiles, states, locks, config) becomes a
+mailbox under a configurable root, and every blob is stored as one e-mail
+message: the content MAC goes into an `X-Plakar-Mac` header and the bytes are
+base64-encoded into the body.
+
+The store is selected by an `imap://` repository location and accepts the same
+connection parameters as the importer/exporter (`username`, `password`, `tls`,
+`tls_no_verify`) plus a `root` parameter. Point `plakar create` at an
+`imap://<host>` location with those parameters to initialize the repository,
+then `backup`/`restore` against it as with any other repository.
+
+Additional storage parameter:
+
+- `root`: root mailbox under which the repository's resource mailboxes are
+  created (default `Plakar`).
+
+**Caveats.** This is a deliberate (and fun) abuse of IMAP and inherits the
+protocol's limits. Bodies are base64-encoded (+33% size), and most servers cap
+message size — very large packfiles may be rejected (chunking blobs across
+multiple messages is not yet implemented). IMAP offers no atomic
+create-if-absent, so repository locking is best-effort; avoid concurrent writers
+to the same repository. Every operation is a round-trip, so it is far slower
+than the `fs`, `s3` or `sftp` stores. Verified end-to-end against Dovecot.
