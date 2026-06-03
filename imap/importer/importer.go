@@ -69,9 +69,17 @@ func (imp *Importer) Import(ctx context.Context, records chan<- *connectors.Reco
 	}
 	imp.pool = pool
 
-	mboxes, err := session.Client.List("", "*", nil).Collect()
+	all, err := session.Client.List("", "*", nil).Collect()
 	if err != nil {
 		return fmt.Errorf("LIST failed: %w", err)
+	}
+
+	// If the location URL carried a path, scope the backup to that mailbox and
+	// its descendants. The native prefix name uses the server delimiter (which
+	// the LIST results report); a message-less holder mailbox is fine.
+	mboxes, err := imp.scopeMailboxes(all)
+	if err != nil {
+		return err
 	}
 
 	// root dir
@@ -136,6 +144,43 @@ func hasAttr(attrs []imap.MailboxAttr, want imap.MailboxAttr) bool {
 		}
 	}
 	return false
+}
+
+// scopeMailboxes filters the full LIST result to the configured mailbox prefix
+// and its descendants. With no prefix it returns the list unchanged. The
+// prefix is matched against the native mailbox name built from the server's
+// hierarchy delimiter, so "Archive" matches "Archive" and "Archive<delim>2024"
+// but not "Archived".
+func (imp *Importer) scopeMailboxes(all []*imap.ListData) ([]*imap.ListData, error) {
+	if len(imp.connector.MailboxPrefix) == 0 {
+		return all, nil
+	}
+
+	// Determine the server delimiter from the LIST results.
+	var delim rune
+	for _, m := range all {
+		if m.Delim != 0 {
+			delim = m.Delim
+			break
+		}
+	}
+
+	prefix := common.SegmentsToMailbox(imp.connector.MailboxPrefix, delim)
+	var sep string
+	if delim != 0 {
+		sep = string(delim)
+	}
+
+	var out []*imap.ListData
+	for _, m := range all {
+		if m.Mailbox == prefix || (sep != "" && strings.HasPrefix(m.Mailbox, prefix+sep)) {
+			out = append(out, m)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("mailbox %q not found on server", prefix)
+	}
+	return out, nil
 }
 
 func (imp *Importer) importMailbox(ctx context.Context, session *common.ImapSession, pool *common.ConnectionPool, mailbox, mboxPath string, records chan<- *connectors.Record) error {
@@ -204,46 +249,7 @@ func (imp *Importer) importMailbox(ctx context.Context, session *common.ImapSess
 		u := uid
 
 		reader := func() (io.ReadCloser, error) {
-			var out []byte
-
-			err := pool.WithSession(ctx, func(ps *common.PoolSession) error {
-				// SELECT mailbox on this pooled connection (state is per-connection)
-				if ps.Selected != mbox {
-					if _, err := ps.Session.Client.Select(mbox, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
-						ps.Bad = true
-						return fmt.Errorf("SELECT %q failed: %w", mbox, err)
-					}
-					ps.Selected = mbox
-				}
-
-				// UID FETCH the full body (peek so we don't set \Seen on the source).
-				var set imap.UIDSet
-				set.AddNum(u)
-
-				fopts := &imap.FetchOptions{
-					BodySection: []*imap.FetchItemBodySection{
-						{Peek: true},
-					},
-				}
-
-				msgs, err := ps.Session.Client.Fetch(set, fopts).Collect()
-				if err != nil {
-					ps.Bad = true
-					return err
-				}
-				if len(msgs) != 1 || len(msgs[0].BodySection) != 1 {
-					return fmt.Errorf("unexpected fetch response (msgs=%d sections=%d)", len(msgs), func() int {
-						if len(msgs) == 0 {
-							return 0
-						}
-						return len(msgs[0].BodySection)
-					}())
-				}
-
-				out = append(out, msgs[0].BodySection[0].Bytes...) // copy so we can return after putting session back
-				return nil
-			})
-
+			out, err := imp.fetchBody(ctx, pool, mbox, u)
 			if err != nil {
 				return nil, err
 			}
@@ -254,6 +260,75 @@ func (imp *Importer) importMailbox(ctx context.Context, session *common.ImapSess
 	}
 
 	return nil
+}
+
+// bodyFetchAttempts is the total number of times fetchBody will try to read a
+// message body before giving up. The first attempt plus one retry covers the
+// common case of a transient connection drop or a single stalled operation
+// (e.g. provider throttling) without masking a genuinely unreadable message.
+const bodyFetchAttempts = 2
+
+// fetchBody reads (and copies) the full RFC822 body of a message by UID,
+// retrying on transient/connection errors with a fresh pooled connection. A
+// clean protocol-level error (e.g. the message was expunged) is returned
+// immediately without retrying.
+func (imp *Importer) fetchBody(ctx context.Context, pool *common.ConnectionPool, mbox string, uid imap.UID) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt < bodyFetchAttempts; attempt++ {
+		if attempt > 0 {
+			// Small backoff before retrying on a fresh connection; bail out
+			// promptly if the backup is being cancelled.
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt) * 500 * time.Millisecond):
+			}
+		}
+
+		var out []byte
+		err := pool.WithSession(ctx, func(ps *common.PoolSession) error {
+			// SELECT mailbox on this pooled connection (state is per-connection).
+			if ps.Selected != mbox {
+				if _, err := ps.Session.Client.Select(mbox, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+					ps.Bad = true
+					return fmt.Errorf("SELECT %q failed: %w", mbox, err)
+				}
+				ps.Selected = mbox
+			}
+
+			// UID FETCH the full body (peek so we don't set \Seen on the source).
+			var set imap.UIDSet
+			set.AddNum(uid)
+			fopts := &imap.FetchOptions{
+				BodySection: []*imap.FetchItemBodySection{{Peek: true}},
+			}
+
+			msgs, err := ps.Session.Client.Fetch(set, fopts).Collect()
+			if err != nil {
+				ps.Bad = true
+				return err
+			}
+			if len(msgs) != 1 || len(msgs[0].BodySection) != 1 {
+				return fmt.Errorf("unexpected fetch response (msgs=%d sections=%d)", len(msgs), func() int {
+					if len(msgs) == 0 {
+						return 0
+					}
+					return len(msgs[0].BodySection)
+				}())
+			}
+
+			out = append(out, msgs[0].BodySection[0].Bytes...) // copy so we can return after the session is back in the pool
+			return nil
+		})
+		if err == nil {
+			return out, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil || !common.IsRetryable(err) {
+			break
+		}
+	}
+	return nil, fmt.Errorf("fetch body uid %d in %q: %w", uint32(uid), mbox, lastErr)
 }
 
 func (imp *Importer) Close(ctx context.Context) error {
