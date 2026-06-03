@@ -2,6 +2,7 @@ package common
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -290,6 +291,34 @@ func IsTryCreate(err error) bool {
 		return true
 	}
 	return strings.Contains(strings.ToUpper(err.Error()), "TRYCREATE")
+}
+
+// IsRetryable reports whether err is a transient failure that a fresh
+// connection might overcome — a dropped/closed socket, an I/O timeout, or the
+// pool watchdog abandoning a stalled operation. A clean protocol-level NO/BAD
+// response (*imap.Error) is NOT retryable: the server has answered and the
+// answer will not change on retry.
+func IsRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrOperationTimeout) {
+		return true
+	}
+	if _, ok := err.(*imap.Error); ok {
+		return false
+	}
+	var ne net.Error
+	if errors.As(err, &ne) {
+		return true
+	}
+	msg := err.Error()
+	for _, s := range []string{"EOF", "broken pipe", "connection reset", "use of closed", "i/o timeout", "deadline exceeded"} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func SafeName(s string) string {

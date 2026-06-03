@@ -235,19 +235,8 @@ func decodeBody(raw []byte) ([]byte, error) {
 }
 
 func isConnError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// An *imap.Error is a clean protocol-level NO/BAD response; everything else
-	// (EOF, broken pipe, timeouts) means the connection is suspect.
-	if _, ok := err.(*imap.Error); ok {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "EOF") ||
-		strings.Contains(msg, "broken pipe") ||
-		strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "use of closed")
+	// A suspect connection is exactly a retryable (non-protocol) error.
+	return common.IsRetryable(err)
 }
 
 // lineWrapper inserts CRLF every 76 base64 characters, keeping bodies within

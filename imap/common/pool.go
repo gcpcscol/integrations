@@ -2,9 +2,15 @@ package common
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
+
+// ErrOperationTimeout is returned by WithSession when an operation exceeds the
+// watchdog budget and is abandoned. It is retryable: a fresh connection may
+// succeed.
+var ErrOperationTimeout = errors.New("imap operation timed out")
 
 // opWatchdogTimeout bounds a single pooled IMAP operation. go-imap performs
 // literal transfers through an internal channel handshake between its reader
@@ -128,7 +134,7 @@ func (p *ConnectionPool) WithSession(ctx context.Context, fn func(*PoolSession) 
 		return err
 
 	case <-timer.C:
-		return p.abandon(ps, &returned, fmt.Errorf("imap operation timed out after %s", budget))
+		return p.abandon(ps, &returned, fmt.Errorf("%w after %s", ErrOperationTimeout, budget))
 	case <-ctx.Done():
 		return p.abandon(ps, &returned, ctx.Err())
 	}
