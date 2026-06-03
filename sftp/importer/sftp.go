@@ -190,7 +190,7 @@ func (imp *Importer) realpathFollow(target string) (resolved string, dev uint64,
 	}
 
 	if info.Mode()&os.ModeSymlink != 0 {
-		realpath, err := os.Readlink(target)
+		realpath, err := imp.client.ReadLink(target)
 		if err != nil {
 			return "", 0, err
 		}
