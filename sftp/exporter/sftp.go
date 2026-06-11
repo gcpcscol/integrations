@@ -106,7 +106,7 @@ func (p *Exporter) Ping(ctx context.Context) error {
 }
 
 func (p *Exporter) Close(ctx context.Context) error {
-	return nil
+	return p.client.Close()
 }
 
 type dirPerm struct {
