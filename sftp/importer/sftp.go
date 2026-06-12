@@ -204,5 +204,5 @@ func (p *Importer) Ping(ctx context.Context) error {
 }
 
 func (p *Importer) Close(ctx context.Context) error {
-	return nil
+	return p.client.Close()
 }

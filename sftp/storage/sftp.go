@@ -108,6 +108,7 @@ func (s *Store) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	_, err = client.Lstat(s.endpoint.Path)
 	return err
@@ -269,7 +270,7 @@ func (s *Store) Size(ctx context.Context) (int64, error) {
 }
 
 func (s *Store) Close(ctx context.Context) error {
-	return nil
+	return s.client.Close()
 }
 
 /* Locks */
