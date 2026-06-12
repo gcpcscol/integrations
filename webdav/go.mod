@@ -3,8 +3,24 @@ module github.com/PlakarKorp/integrations/webdav
 go 1.26.2
 
 require (
+	github.com/PlakarKorp/go-kloset-sdk v1.1.0
 	github.com/emersion/go-webdav v0.7.0
 	golang.org/x/sync v0.20.0
+)
+
+require (
+	github.com/PlakarKorp/integration-grpc v1.1.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/nickball/go-aes-key-wrap v0.0.0-20170929221519-1c3aa3e4dfc5 // indirect
+	github.com/pierrec/lz4/v4 v4.1.27 // indirect
+	github.com/tink-crypto/tink-go/v2 v2.6.0 // indirect
+	github.com/zeebo/blake3 v0.2.4 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
+	google.golang.org/grpc v1.81.1 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )
 
 require (
