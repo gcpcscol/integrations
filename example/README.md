@@ -21,12 +21,13 @@ An integration does not have to provide all three connector types. You only impl
 ```
 .
 ├── connector.go        # Shared connector logic and interface implementations
-├── importer/
-│   └── main.go         # Importer entrypoint
-├── exporter/
-│   └── main.go         # Exporter entrypoint
-├── storage/
-│   └── main.go         # Storage entrypoint
+├── plugin/
+│   ├── importer/
+│   │   └── main.go     # Importer entrypoint
+│   ├── exporter/
+│   │   └── main.go     # Exporter entrypoint
+│   └── storage/
+│       └── main.go     # Storage entrypoint
 ├── manifest.yaml       # Plugin manifest describing the connectors
 ├── Makefile            # Build and packaging targets
 ├── go.mod
@@ -115,7 +116,7 @@ The storage constructor has a different signature — it does not receive `*conn
 func NewStore(ctx context.Context, proto string, config map[string]string) (storage.Store, error)
 ```
 
-The `config` map contains the parsed location and other settings. The `config["location"]` value holds the full URI (e.g., `test:///some/path`).
+The `config` map contains the parsed location and other settings. The `config["location"]` value holds the full URI (e.g., `example:///some/path`).
 
 ### Registration
 
@@ -123,9 +124,9 @@ In your connector file, register your connector types in an `init()` function:
 
 ```go
 func init() {
-  importer.Register("test", location.FLAG_LOCALFS, NewImporter)
-  exporter.Register("test", location.FLAG_LOCALFS, NewExporter)
-  storage.Register("test", location.FLAG_LOCALFS, NewStore)
+  importer.Register("example", location.FLAG_LOCALFS, NewImporter)
+  exporter.Register("example", location.FLAG_LOCALFS, NewExporter)
+  storage.Register("example", location.FLAG_LOCALFS, NewStore)
 }
 ```
 
@@ -215,7 +216,7 @@ func main() {
 The `Import` method sends records into the `records` channel. Each record represents a file with its metadata and a function to open its content. Unless `FLAG_NEEDACK` is set, `results` is nil and can be ignored — most integrations won't need it.
 
 ```go
-func (f *testConnector) Import(ctx context.Context, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
+func (e *example) Import(ctx context.Context, records chan<- *connectors.Record, results <-chan *connectors.Result) error {
   defer close(records)
 
   info, err := os.Stat(path)
@@ -246,7 +247,7 @@ You **must** `close(records)` when done to signal that all records have been sen
 The `Export` method receives records from the `records` channel and processes them. You **must** `close(results)` when done and send a result for each record via `record.Ok()` or `record.Error(err)`:
 
 ```go
-func (f *testConnector) Export(ctx context.Context, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
+func (e *example) Export(ctx context.Context, records <-chan *connectors.Record, results chan<- *connectors.Result) error {
   defer close(results)
 
   for record := range records {
@@ -280,7 +281,7 @@ The `manifest.yaml` file describes your plugin and its connectors. See the [`man
 make build
 ```
 
-This runs the `build` target in the Makefile, which compiles the importer, exporter, and storage into separate binaries (`test-importer`, `test-exporter`, and `test-storage`).
+This runs the `build` target in the Makefile, which compiles the importer, exporter, and storage into separate binaries (`example-importer`, `example-exporter`, and `example-storage`).
 
 ## Packaging
 
@@ -293,7 +294,7 @@ This runs the `create` target in the Makefile, which creates a `.ptar` package f
 ## Installing
 
 ```sh
-plakar pkg add <package-file>.ptar
+plakar pkg add example_*.ptar
 ```
 
 To verify the package was installed:
@@ -301,17 +302,17 @@ To verify the package was installed:
 ```sh
 $ plakar pkg show
 s3@v1.1.0-beta.2
-test-integration@v1.1.0-beta.4
+example@v1.1.0-beta.4
 ```
 
 ## Usage
 
 Once installed, use your protocol name in plakar commands. The protocol URI format depends on the type of integration:
 
-- **Local filesystem** - `protocol:///path/to/directory` (e.g., `test:///home/user/Documents`)
+- **Local filesystem** - `protocol:///path/to/directory` (e.g., `example:///home/user/Documents`)
 - **Remote/API-based** - `protocol://host-or-endpoint` (e.g., `s3://us-east-1.amazonaws.com/bucket`)
 
-This example integration uses `test://` with hardcoded paths, so the location after `test://` is ignored — the importer always reads from `/home/tracepanic/Documents/notes.md` as the hardcoded file location.
+This example integration uses `example://` and yields fake data, no matter what the location looks like.
 
 ## Examples: Different Integration Patterns
 

@@ -5,14 +5,14 @@ homepage: https://github.com/tracepanic/plakar-integration
 license: ISC
 connectors:
   - type: importer
-    executable: ./test-importer
-    protocols: [test]
+    executable: ./example-importer
+    protocols: [example]
     flags: [localfs]
   - type: exporter
-    executable: ./test-exporter
-    protocols: [test]
+    executable: ./example-exporter
+    protocols: [example]
     flags: [localfs]
   - type: storage
-    executable: ./test-storage
-    protocols: [test]
+    executable: ./example-storage
+    protocols: [example]
     flags: [localfs]

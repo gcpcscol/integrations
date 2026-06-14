@@ -7,9 +7,9 @@ VERSION	= v1.1.0
 all: build
 
 build:
-	${GO} build -v -o test-importer${EXT} ./importer
-	${GO} build -v -o test-exporter${EXT} ./exporter
-	${GO} build -v -o test-storage${EXT} ./storage
+	${GO} build -v -o example-importer${EXT} ./plugin/importer
+	${GO} build -v -o example-exporter${EXT} ./plugin/exporter
+	${GO} build -v -o example-storage${EXT} ./plugin/storage
 
 package: build
 	rm -f example_${VERSION}_*.ptar
@@ -19,7 +19,7 @@ uninstall:
 	-${PLAKAR} pkg rm example
 
 install: package
-	${PLAKAR} pkg add ./webdav_${VERSION}_*.ptar
+	${PLAKAR} pkg add ./example_${VERSION}_*.ptar
 
 reinstall: uninstall install
 
@@ -29,6 +29,6 @@ test:
 check: test
 
 clean:
-	rm -f test-importer${EXT} test-exporter${EXT} test-storage${EXT} test-integration_*.ptar
+	rm -f example-importer${EXT} example-exporter${EXT} example-storage${EXT} example-integration_*.ptar
 
 .PHONY: all build package uninstall install reinstall test check clean
