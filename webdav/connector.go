@@ -102,6 +102,15 @@ func (w *WebDAV) Import(ctx context.Context, records chan<- *connectors.Record, 
 	wg.SetLimit(w.concurrency)
 
 	return w.walk(ctx, func(p string, sb *webdav.FileInfo, err error) error {
+		if err != nil {
+			err = fmt.Errorf("failed to walk %s: %w", p, err)
+			if p == w.location.Path {
+				return err
+			}
+			records <- connectors.NewError(p, err)
+			return nil
+		}
+
 		finfo := objects.FileInfo{
 			Lname:    path.Base(p),
 			Lsize:    sb.Size,
