@@ -8,20 +8,20 @@ connectors:
 - type: importer
   executable: k8s-importer
   protocols: [k8s]
-  validator: ./importer/k8s.json
+  validator: ./plugin/importer/k8s.json
 - type: importer
   executable: k8s-importer
   protocols: [k8s+csi]
-  validator: ./importer/k8s+csi.json
+  validator: ./plugin/importer/k8s+csi.json
 - type: importer
   executable: k8s-importer
   protocols: [k8s+pvc]
-  validator: ./importer/k8s+pvc.json
+  validator: ./plugin/importer/k8s+pvc.json
 - type: exporter
   executable: k8s-exporter
   protocols: [k8s]
-  validator: ./exporter/k8s.json
+  validator: ./plugin/exporter/k8s.json
 - type: exporter
   executable: k8s-exporter
   protocols: [k8s+csi]
-  validator: ./exporter/k8s+pvc.json
+  validator: ./plugin/exporter/k8s+pvc.json
