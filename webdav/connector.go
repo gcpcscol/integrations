@@ -56,6 +56,9 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 		loc.Scheme = "http"
 
 	case "davs":
+		if insecure, _ := strconv.ParseBool(params["insecure"]); insecure {
+			return nil, fmt.Errorf("cannot use davs:// with insecure=true")
+		}
 		loc.Scheme = "https"
 
 	default:
