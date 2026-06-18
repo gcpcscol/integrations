@@ -2,6 +2,8 @@ name: publish docker image
 
 on:
   push:
+    branches:
+      - integration/k8s
     paths:
       - .github/workflows/k8s-image.yml
       - k8s/go.mod
