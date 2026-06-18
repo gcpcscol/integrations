@@ -39,7 +39,6 @@ If using [got](https://gameoftrees.org) instead:
 
 This should create two checkouts by stripping the leading directory.
 
-
 ## Importing a new integration
 
 Requirements:
@@ -128,6 +127,7 @@ Let's assume you'd like to release the "foo" integration v1.1.0:
 Then, merge the stable release in main:
 
 	$ cd ../../integrations
+	$ git switch main
 	$ git merge foo/v1.1.0
 	$ git push
 
