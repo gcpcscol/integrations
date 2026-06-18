@@ -32,11 +32,10 @@ func init() {
 	exporter.Register("davs", 0, NewExporter)
 }
 
-func New(ctx context.Context, opts *connectors.Options, name string, params map[string]string) (*WebDAV, error) {
-	var httpc webdav.HTTPClient
-
+func New(ctx context.Context, opts *connectors.Options, name string, params map[string]string, baseClient webdav.HTTPClient) (*WebDAV, error) {
+	httpc := baseClient
 	if u, ok := params["username"]; ok {
-		httpc = webdav.HTTPClientWithBasicAuth(nil, u, params["password"])
+		httpc = webdav.HTTPClientWithBasicAuth(httpc, u, params["password"])
 	}
 
 	loc, err := url.Parse(params["location"])
@@ -78,11 +77,11 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 }
 
 func NewImporter(ctx context.Context, opts *connectors.Options, name string, params map[string]string) (importer.Importer, error) {
-	return New(ctx, opts, name, params)
+	return New(ctx, opts, name, params, nil)
 }
 
 func NewExporter(ctx context.Context, opts *connectors.Options, name string, params map[string]string) (exporter.Exporter, error) {
-	return New(ctx, opts, name, params)
+	return New(ctx, opts, name, params, nil)
 }
 
 func (w *WebDAV) Type() string          { return "webdav" }
