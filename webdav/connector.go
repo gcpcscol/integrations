@@ -44,6 +44,10 @@ func New(ctx context.Context, opts *connectors.Options, name string, params map[
 		return nil, fmt.Errorf("failed to parse location: %w", err)
 	}
 
+	if loc.Path == "" {
+		loc.Path = "/"
+	}
+
 	switch name {
 	case "dav":
 		if insecure, _ := strconv.ParseBool(params["insecure"]); !insecure {
