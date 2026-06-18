@@ -1,6 +1,6 @@
-# plakar integrations
+# Plakar integrations
 
-This repository holds all the official plakar integrations.
+This repository holds all the official Plakar integrations.
 
 ## Contributing
 
@@ -9,7 +9,7 @@ you want to submit a change for the s3 integration:
 
 	$ git clone -b integration/s3 ssh://git@github.com/PlakarKorp/integrations.git
 
-don't forget to pick the right base branch when opening a PR!  (in
+Don't forget to pick the right base branch when opening a PR!  (in
 this case, `integration/s3`.)
 
 
@@ -24,7 +24,7 @@ answer though.
 	$ git worktree add ../s3  integration/s3
 	$ git worktree add ../k8s integration/k8s
 
-then, you should be able to find the s3 code in `../s3/s3`, and
+Then, you should be able to find the s3 code in `../s3/s3`, and
 similarly the kubernetes one in `../k8s/k8s`.  Unfortunately git does
 not allow to strip components off the front of the path, so the
 "double integration name" is not remove-able.
@@ -37,7 +37,7 @@ If using [got](https://gameoftrees.org) instead:
 	$ got checkout -b integration/s3  -p s3  /git/integrations.git
 	$ got checkout -b integration/k8s -p k8s /git/integrations.git
 
-this should create two checkouts by stripping the leading directory.
+This should create two checkouts by stripping the leading directory.
 
 
 ## Importing a new integration
@@ -57,13 +57,13 @@ Keeping this in mind, to add a new integration "foo":
 	$ mkdir ../foo/foo
 	$ cd ../foo/foo
 
-make sure there's a "dobule name" in the path, i.e.
+make sure there's a "double name" in the path, i.e.
 
 	$ pwd
 	.../foo/foo
 
-because it's important for the requirement 2!  Remember: only the
-`.github` directory can, in case, be at the top level of your
+Because this is important for the requirement 2!  Remember: Only the
+`.github` directory can, in case it is used, be at the top-level of your
 worktree.
 
 Then, actually write the code for the integration:
@@ -105,7 +105,7 @@ tracked.
 ## Releasing an integration
 
 When you're ready to finally release an integration, be it for the
-first time or as an update, the process is the same.
+first time or as an update, the process is as follows.
 
 Let's assume you'd like to release the "foo" integration v1.1.0:
 
