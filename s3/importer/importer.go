@@ -246,20 +246,19 @@ func (p *S3Importer) Import(ctx context.Context, records chan<- *connectors.Reco
 			Ldev:     1,
 		}
 
-		obj, err := p.minioClient.GetObject(ctx, p.bucket, object.Key, minio.GetObjectOptions{ServerSideEncryption: p.ssec})
-		if err != nil {
-			continue
-		}
 		var xattr []string
-		if stat, err := obj.Stat(); err == nil {
-			xattrStr, err := json.Marshal(stat)
-			if err == nil {
-				xattr = append(xattr, string(xattrStr))
+		obj, err := p.minioClient.GetObject(ctx, p.bucket, object.Key, minio.GetObjectOptions{ServerSideEncryption: p.ssec})
+		if err == nil {
+			if stat, err := obj.Stat(); err == nil {
+				xattrStr, err := json.Marshal(stat)
+				if err == nil {
+					xattr = append(xattr, string(xattrStr))
+				}
 			}
 		}
 
 		records <- connectors.NewRecord("/"+object.Key, "", fi, xattr, func() (io.ReadCloser, error) {
-			return obj, nil
+			return obj, err
 		})
 	}
 
